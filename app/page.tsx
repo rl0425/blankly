@@ -1,65 +1,110 @@
-import Image from "next/image";
+import { redirect } from "next/navigation";
+import { createClient } from "@/shared/lib/supabase/server";
+import { getUserProfile } from "@/features/auth/actions/auth";
+import { getProjects } from "@/features/study/actions/projects";
+import { Header } from "@/features/auth/components/Header";
+import { Navigation } from "@/features/auth/components/Navigation";
+import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/components/card";
+import { BookOpen, CheckCircle, TrendingUp } from "lucide-react";
 
-export default function Home() {
+export default async function HomePage() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  const profile = await getUserProfile();
+  const projects = await getProjects();
+
+  const accuracy = profile && profile.total_solved > 0
+    ? Math.round((profile.total_correct / profile.total_solved) * 100)
+    : 0;
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <div className="min-h-screen bg-background pb-20">
+      <Header />
+      
+      <main className="container mx-auto px-4 py-8">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold toss-heading mb-2">
+            안녕하세요, {profile?.nickname}님! 👋
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="text-muted-foreground toss-body">
+            오늘도 열심히 학습해볼까요?
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+        {/* Stats Cards */}
+        <div className="grid gap-4 md:grid-cols-3 mb-8">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">총 문제 수</CardTitle>
+              <BookOpen className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{profile?.total_solved || 0}</div>
+              <p className="text-xs text-muted-foreground">지금까지 푼 문제</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">정답 수</CardTitle>
+              <CheckCircle className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{profile?.total_correct || 0}</div>
+              <p className="text-xs text-muted-foreground">맞힌 문제 수</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">정답률</CardTitle>
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{accuracy}%</div>
+              <p className="text-xs text-muted-foreground">전체 정답률</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Recent Projects */}
+        <div>
+          <h2 className="text-xl font-bold mb-4">최근 프로젝트</h2>
+          {projects.length === 0 ? (
+            <Card>
+              <CardContent className="py-8 text-center text-muted-foreground">
+                아직 프로젝트가 없어요. 학습 탭에서 새 프로젝트를 만들어보세요!
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2">
+              {projects.slice(0, 4).map((project) => (
+                <Card key={project.id} className="hover:shadow-lg transition-shadow cursor-pointer">
+                  <CardHeader>
+                    <CardTitle>{project.title}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">{project.category}</span>
+                      <span className="text-primary font-medium">
+                        {project.completed_rooms}/{project.total_rooms} Day
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </div>
       </main>
+
+      <Navigation />
     </div>
   );
 }
+
