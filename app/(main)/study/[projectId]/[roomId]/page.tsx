@@ -9,8 +9,9 @@ import { Navigation } from "@/features/auth/components/Navigation";
 import { ProblemCard } from "@/features/problem/components/ProblemCard";
 import { AnswerInput } from "@/features/problem/components/AnswerInput";
 import { useToast } from "@/shared/hooks/use-toast";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, ArrowLeft, CheckCircle } from "lucide-react";
 import type { Problem, Room } from "@/shared/types";
+import Link from "next/link";
 
 export default function RoomProblemPage({
   params,
@@ -27,7 +28,9 @@ export default function RoomProblemPage({
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [showResult, setShowResult] = useState(false);
   const [isCorrect, setIsCorrect] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [aiFeedback, setAiFeedback] = useState<any>(null);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   
   const router = useRouter();
   const { toast } = useToast();
@@ -39,50 +42,33 @@ export default function RoomProblemPage({
   const loadData = useCallback(async () => {
     if (!resolvedParams) return;
 
-    setLoading(true);
+    setInitialLoading(true);
     
-    // Mock data for demonstration
-    // In real implementation, fetch from API
-    setRoom({
-      id: resolvedParams.roomId,
-      project_id: resolvedParams.projectId,
-      title: "Day 1: 기초 문법",
-      day_number: 1,
-      total_problems: 5,
-      problem_type: "fill_blank",
-      difficulty: "easy",
-      status: "not_started",
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    });
+    try {
+      // 방 정보 가져오기
+      const roomResponse = await fetch(`/api/rooms/${resolvedParams.roomId}`);
+      if (!roomResponse.ok) throw new Error("방 정보를 가져올 수 없습니다");
+      const { data: roomData } = await roomResponse.json();
+      setRoom(roomData);
 
-    setProblems([
-      {
-        id: "1",
-        room_id: resolvedParams.roomId,
-        question: "React는 _____ 라이브러리입니다.",
-        question_type: "fill_blank",
-        correct_answer: "JavaScript",
-        explanation: "React는 사용자 인터페이스를 구축하기 위한 JavaScript 라이브러리입니다.",
-        difficulty: "easy",
-        order_number: 1,
-        created_at: new Date().toISOString(),
-      },
-      {
-        id: "2",
-        room_id: resolvedParams.roomId,
-        question: "컴포넌트 기반 아키텍처를 사용하며, _____ DOM을 통해 효율적인 렌더링을 제공합니다.",
-        question_type: "fill_blank",
-        correct_answer: "가상",
-        explanation: "React는 가상 DOM을 사용하여 효율적으로 UI를 업데이트합니다.",
-        difficulty: "medium",
-        order_number: 2,
-        created_at: new Date().toISOString(),
-      },
-    ]);
-    
-    setLoading(false);
-  }, [resolvedParams]);
+      // 문제 목록 가져오기
+      const problemsResponse = await fetch(`/api/rooms/${resolvedParams.roomId}/problems`);
+      if (!problemsResponse.ok) throw new Error("문제를 가져올 수 없습니다");
+      const { data: problemsData } = await problemsResponse.json();
+      
+      console.log(`${problemsData.length}개의 문제를 불러왔습니다`);
+      setProblems(problemsData);
+    } catch (error: any) {
+      console.error("데이터 로드 오류:", error);
+      toast({
+        title: "오류 발생",
+        description: error.message || "데이터를 불러올 수 없습니다",
+        variant: "destructive",
+      });
+    } finally {
+      setInitialLoading(false);
+    }
+  }, [resolvedParams, toast]);
 
   useEffect(() => {
     loadData();
@@ -95,35 +81,107 @@ export default function RoomProblemPage({
     setAnswers({ ...answers, [currentProblem.id]: answer });
   };
 
-  const handleSubmit = () => {
-    if (!currentProblem) return;
+  const handleSubmit = async () => {
+    if (!currentProblem || !resolvedParams) return;
     
     const userAnswer = answers[currentProblem.id] || "";
-    const correct = userAnswer.trim().toLowerCase() === currentProblem.correct_answer.trim().toLowerCase();
     
-    setIsCorrect(correct);
-    setShowResult(true);
+    if (!userAnswer.trim()) {
+      toast({
+        title: "답변을 입력하세요",
+        description: "답을 입력한 후 제출해주세요",
+        variant: "destructive",
+      });
+      return;
+    }
 
-    toast({
-      title: correct ? "정답입니다! 🎉" : "틀렸습니다 😢",
-      description: correct ? "다음 문제로 넘어가세요" : "다시 한번 생각해보세요",
-      variant: correct ? "default" : "destructive",
-    });
+    setSubmitting(true);
+
+    try {
+      // 답안 제출 API 호출
+      const response = await fetch("/api/problems/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          problemId: currentProblem.id,
+          roomId: resolvedParams.roomId,
+          userAnswer,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "답안 제출 실패");
+      }
+
+      const { isCorrect: correct, aiFeedback: feedback } = await response.json();
+      
+      setIsCorrect(correct);
+      setAiFeedback(feedback);
+      setShowResult(true);
+
+      toast({
+        title: correct ? "정답입니다! 🎉" : "틀렸습니다 😢",
+        description: feedback?.feedback || (correct ? "다음 문제로 넘어가세요" : "다시 확인해보세요"),
+        variant: correct ? "default" : "destructive",
+      });
+    } catch (error: any) {
+      console.error("답안 제출 오류:", error);
+      toast({
+        title: "오류 발생",
+        description: error.message || "답안 제출 중 문제가 발생했습니다",
+        variant: "destructive",
+      });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     setShowResult(false);
     setIsCorrect(false);
+    setAiFeedback(null);
     
     if (currentIndex < problems.length - 1) {
       setCurrentIndex(currentIndex + 1);
     } else {
-      toast({
-        title: "모든 문제를 완료했습니다! 🎉",
-        description: "수고하셨습니다!",
-      });
+      // 모든 문제 완료 - 세션 저장
       if (resolvedParams) {
-        router.push(`/study/${resolvedParams.projectId}`);
+        setSubmitting(true);
+        
+        try {
+          // 통계 계산
+          const correctCount = Object.values(answers).filter((_, idx) => {
+            // 여기서는 간단히 제출된 답변 수만 계산 (실제 정답 여부는 서버에서 확인)
+            return true;
+          }).length;
+          
+          // 세션 완료 처리
+          const { completeRoomSession } = await import("@/features/problem/actions/problems");
+          await completeRoomSession(resolvedParams.roomId, {
+            totalProblems: problems.length,
+            solvedCount: Object.keys(answers).length,
+            correctCount: Object.keys(answers).length, // 임시로 제출한 문제 수
+            wrongCount: 0,
+          });
+
+          toast({
+            title: "모든 문제를 완료했습니다! 🎉",
+            description: "수고하셨습니다!",
+          });
+
+          router.push(`/study/${resolvedParams.projectId}`);
+        } catch (error) {
+          console.error("세션 완료 처리 오류:", error);
+          toast({
+            title: "완료 처리 중 오류 발생",
+            description: "하지만 답변은 저장되었습니다",
+            variant: "destructive",
+          });
+          router.push(`/study/${resolvedParams.projectId}`);
+        } finally {
+          setSubmitting(false);
+        }
       }
     }
   };
@@ -132,29 +190,97 @@ export default function RoomProblemPage({
     if (currentIndex > 0) {
       setShowResult(false);
       setIsCorrect(false);
+      setAiFeedback(null);
       setCurrentIndex(currentIndex - 1);
     }
   };
 
-  if (loading || !resolvedParams) {
+  const handleMarkAsCorrect = async () => {
+    if (!currentProblem || !resolvedParams) return;
+
+    setSubmitting(true);
+
+    try {
+      // 강제로 정답 처리 (is_correct: true로 업데이트)
+      const response = await fetch("/api/problems/mark-correct", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          problemId: currentProblem.id,
+          roomId: resolvedParams.roomId,
+          userAnswer: answers[currentProblem.id] || "",
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("정답 처리 실패");
+      }
+
+      setIsCorrect(true);
+      toast({
+        title: "정답으로 처리되었습니다 ✅",
+        description: "다음 문제로 넘어가세요",
+      });
+    } catch (error: any) {
+      toast({
+        title: "오류 발생",
+        description: error.message || "정답 처리 중 문제가 발생했습니다",
+        variant: "destructive",
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // 초기 로딩 중 (데이터 가져오기 전)
+  if (initialLoading) {
     return (
       <div className="min-h-screen bg-background pb-20">
         <Header />
-        <main className="container mx-auto px-4 py-8">
-          <div className="text-center">로딩 중...</div>
+        <main className="container mx-auto px-4 py-8 max-w-2xl">
+          <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+            {/* 로딩 스피너 */}
+            <div className="relative w-16 h-16">
+              <div className="absolute inset-0 border-4 border-primary/20 rounded-full"></div>
+              <div className="absolute inset-0 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+            </div>
+            <p className="text-lg font-medium text-muted-foreground">
+              문제를 불러오는 중...
+            </p>
+            <p className="text-sm text-muted-foreground">
+              잠시만 기다려주세요
+            </p>
+          </div>
         </main>
         <Navigation />
       </div>
     );
   }
 
-  if (problems.length === 0) {
+  // 로딩 완료 후: 데이터 없음
+  if (!room || problems.length === 0) {
     return (
       <div className="min-h-screen bg-background pb-20">
         <Header />
-        <main className="container mx-auto px-4 py-8">
-          <div className="text-center text-muted-foreground">
-            문제가 없습니다.
+        <main className="container mx-auto px-4 py-8 max-w-2xl">
+          <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+            <div className="text-6xl">📭</div>
+            <p className="text-lg font-medium text-muted-foreground">
+              {!room ? "방을 찾을 수 없습니다" : "생성된 문제가 없습니다"}
+            </p>
+            <p className="text-sm text-muted-foreground text-center">
+              {!room 
+                ? "방이 삭제되었거나 존재하지 않습니다" 
+                : "방 생성 중 문제가 발생했을 수 있습니다"}
+            </p>
+            {resolvedParams && (
+              <Link href={`/study/${resolvedParams.projectId}`}>
+                <Button variant="outline" className="mt-4">
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  방 목록으로 돌아가기
+                </Button>
+              </Link>
+            )}
           </div>
         </main>
         <Navigation />
@@ -169,10 +295,21 @@ export default function RoomProblemPage({
       <Header />
       
       <main className="container mx-auto px-4 py-8 max-w-2xl">
+        {/* Back Button */}
+        {resolvedParams && (
+          <Link 
+            href={`/study/${resolvedParams.projectId}`}
+            className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-4"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            방 목록으로 돌아가기
+          </Link>
+        )}
+
         {/* Progress */}
         <div className="mb-6">
           <div className="flex justify-between text-sm mb-2">
-            <span className="font-medium">{room?.title}</span>
+            <span className="font-medium">{room.title}</span>
             <span className="text-muted-foreground">
               {currentIndex + 1}/{problems.length}
             </span>
@@ -196,12 +333,37 @@ export default function RoomProblemPage({
           />
         </ProblemCard>
 
+        {/* AI Feedback (주관식 오답일 경우) */}
+        {showResult && !isCorrect && (
+          <div className="mt-4 space-y-3">
+            {aiFeedback && (
+              <div className="p-4 rounded-xl bg-muted">
+                <p className="text-sm font-medium mb-2">AI 피드백</p>
+                <p className="text-sm text-muted-foreground">
+                  {aiFeedback.improvement_tip || aiFeedback.feedback}
+                </p>
+              </div>
+            )}
+            
+            {/* 정답으로 처리하기 버튼 */}
+            <Button
+              variant="outline"
+              onClick={handleMarkAsCorrect}
+              disabled={submitting}
+              className="w-full"
+            >
+              <CheckCircle className="h-4 w-4 mr-2" />
+              {submitting ? "처리 중..." : "AI가 틀렸어요! 정답으로 처리하기"}
+            </Button>
+          </div>
+        )}
+
         {/* Navigation Buttons */}
         <div className="mt-6 flex gap-3">
           <Button
             variant="outline"
             onClick={handlePrevious}
-            disabled={currentIndex === 0}
+            disabled={currentIndex === 0 || submitting}
             className="flex-1"
           >
             <ChevronLeft className="h-4 w-4 mr-2" />
@@ -211,23 +373,36 @@ export default function RoomProblemPage({
           {!showResult ? (
             <Button
               onClick={handleSubmit}
-              disabled={!answers[currentProblem.id]}
+              disabled={!answers[currentProblem.id] || submitting}
               className="flex-1"
             >
-              제출
+              {submitting ? (
+                <>
+                  <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent"></div>
+                  채점 중...
+                </>
+              ) : (
+                "제출"
+              )}
             </Button>
           ) : (
-            <Button onClick={handleNext} className="flex-1">
+            <Button onClick={handleNext} className="flex-1" disabled={submitting}>
               {currentIndex < problems.length - 1 ? (
                 <>
                   다음
                   <ChevronRight className="h-4 w-4 ml-2" />
                 </>
               ) : (
-                "완료"
+                submitting ? "완료 처리 중..." : "완료"
               )}
             </Button>
           )}
+        </div>
+
+        {/* Debug Info */}
+        <div className="mt-4 text-xs text-muted-foreground text-center">
+          문제 ID: {currentProblem.id.slice(0, 8)}... | 
+          유형: {currentProblem.question_type === "fill_blank" ? "주관식" : "객관식"}
         </div>
       </main>
 
@@ -235,4 +410,3 @@ export default function RoomProblemPage({
     </div>
   );
 }
-

@@ -35,19 +35,26 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Public routes
-  const publicRoutes = ['/login', '/signup'];
-  const isPublicRoute = publicRoutes.some(route => 
+  // 로그인이 필요한 경로들만 보호
+  const protectedRoutes = ['/mypage', '/study'];
+  const authRoutes = ['/login', '/signup'];
+  
+  const isProtectedRoute = protectedRoutes.some(route => 
+    request.nextUrl.pathname.startsWith(route)
+  );
+  const isAuthRoute = authRoutes.some(route => 
     request.nextUrl.pathname.startsWith(route)
   );
 
-  // If user is not logged in and trying to access protected route
-  if (!user && !isPublicRoute) {
-    return NextResponse.redirect(new URL('/login', request.url));
+  // 로그인 안 한 상태에서 보호된 경로 접근 시 로그인 페이지로
+  if (!user && isProtectedRoute) {
+    const redirectUrl = new URL('/login', request.url);
+    redirectUrl.searchParams.set('redirectTo', request.nextUrl.pathname);
+    return NextResponse.redirect(redirectUrl);
   }
 
-  // If user is logged in and trying to access auth pages
-  if (user && isPublicRoute) {
+  // 로그인한 상태에서 auth 페이지 접근 시 홈으로
+  if (user && isAuthRoute) {
     return NextResponse.redirect(new URL('/', request.url));
   }
 

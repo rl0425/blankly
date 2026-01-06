@@ -55,7 +55,7 @@ export interface Room {
 }
 
 // Problem Types
-export type QuestionType = 'multiple_choice' | 'fill_blank';
+export type QuestionType = 'multiple_choice' | 'multiple_select' | 'fill_blank';
 
 export interface Problem {
   id: string;

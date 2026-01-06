@@ -69,26 +69,81 @@ ${content}
 export function getGradeAnswerPrompt(
   question: string,
   correctAnswer: string,
-  userAnswer: string
+  userAnswer: string,
+  alternatives?: string[],
+  strictness: "strict" | "normal" | "lenient" = "normal"
 ) {
+  const alternativesText = alternatives && alternatives.length > 0
+    ? `\n인정되는 대체 정답들: ${alternatives.join(", ")}`
+    : "";
+
+  const strictnessInstructions = {
+    strict: `
+**채점 기준: 엄격 (Strict) - 용어/단어 문제용**
+- **최우선**: alternatives 목록을 먼저 확인! alternatives에 있으면 무조건 정답
+- 정답 또는 alternatives와 **정확히 일치**하거나 **완벽한 동의어**면 정답
+- 대소문자 무시 (예: "DOM" = "dom")
+- 띄어쓰기 무시 (예: "실행컨텍스트" = "실행 컨텍스트")
+- **명백한 동의어 허용** (예: "정의된" = "선언된", "생성" = "만들기")
+- 하지만 **전혀 다른 개념**은 오답 (예: "버츄얼" ≠ "실행 컨텍스트")
+- 경미한 오타는 허용 (예: "렉시컬" = "렉시칼")`,
+    
+    normal: `
+**채점 기준: 보통 (Normal)**
+- 의미가 유사하면 정답
+- 경미한 오타는 허용 (1-2글자)
+- 한글/영어 번역 모두 허용
+- 동의어, 유사 표현 허용
+- alternatives 참고`,
+    
+    lenient: `
+**채점 기준: 느슨 (Lenient)**
+- 핵심 키워드만 포함되어도 정답
+- 오타 관대하게 허용
+- 부분 정답도 정답 처리
+- 맥락상 답의 의도가 맞으면 정답
+- 추가 설명이 있어도 정답 인정`
+  };
+
   return `당신은 공정한 채점자입니다.
 
+${strictnessInstructions[strictness]}
+
 문제: ${question}
-정답: ${correctAnswer}
+정답: ${correctAnswer}${alternativesText}
 학생 답안: ${userAnswer}
 
-채점 기준:
-- 의미가 같으면 정답
-- 철자 오류는 관대하게
-- 대소문자 구분 안 함
-- 공백, 특수문자 무시
+채점 기준 (다음 중 하나라도 해당하면 정답):
+1. **의미가 같으면 정답**
+   - 동의어 인정 (예: "빠른" = "신속한" = "fast" = "quick")
+   - 번역 인정 (예: "가상" = "Virtual" = "virtual" = "버츄얼" = "버추얼")
+   
+2. **언어/표기 변형 모두 인정**
+   - 한글 ↔ 영어 (예: "돔" = "DOM" = "dom")
+   - 대소문자 무시 (예: "JavaScript" = "javascript" = "JAVASCRIPT")
+   - 띄어쓰기 무시 (예: "자바스크립트" = "자바 스크립트")
+   
+3. **축약형/풀네임 모두 인정**
+   - "JS" = "JavaScript" = "자바스크립트"
+   - "HTML" = "HyperText Markup Language"
+   
+4. **경미한 철자 오류 관대하게**
+   - "버츄얼" = "버추얼" = "버쳬얼"
+   - "리액트" = "리엑트"
+
+5. **숫자/단위 변형**
+   - "10개" = "10" = "십" = "ten"
+
+**중요**: 
+- **엄격 모드**에서는 정답/alternatives와 정확히 일치하는 것만 정답!
+- **보통/느슨 모드**에서는 학생이 핵심 개념을 이해했다면 표현이 달라도 정답 처리!
 
 출력 형식 (JSON):
 {
   "is_correct": true/false,
   "score": 0-100,
-  "feedback": "피드백",
-  "improvement_tip": "개선 조언 (오답일 경우)"
+  "feedback": "피드백 (정답이면 칭찬, 오답이면 정답 힌트)",
+  "improvement_tip": "개선 조언 (오답일 경우만)"
 }
 
 반드시 유효한 JSON 형식으로만 응답하세요.`;

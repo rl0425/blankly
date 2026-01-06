@@ -7,15 +7,17 @@ const RequestSchema = z.object({
   question: z.string().min(1),
   correctAnswer: z.string().min(1),
   userAnswer: z.string().min(1),
+  alternatives: z.array(z.string()).optional(),
+  gradingStrictness: z.enum(["strict", "normal", "lenient"]).optional().default("normal"),
 });
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     
-    const { question, correctAnswer, userAnswer } = RequestSchema.parse(body);
+    const { question, correctAnswer, userAnswer, alternatives, gradingStrictness } = RequestSchema.parse(body);
 
-    const prompt = getGradeAnswerPrompt(question, correctAnswer, userAnswer);
+    const prompt = getGradeAnswerPrompt(question, correctAnswer, userAnswer, alternatives, gradingStrictness);
 
     const completion = await groq.chat.completions.create({
       messages: [

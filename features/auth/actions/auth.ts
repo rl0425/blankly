@@ -28,10 +28,15 @@ export async function signup(formData: FormData) {
 
     const supabase = await createClient();
     
-    // 1. 회원가입
+    // 회원가입 (프로필은 DB 트리거가 자동 생성)
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: validatedData.email,
       password: validatedData.password,
+      options: {
+        data: {
+          nickname: validatedData.nickname,
+        },
+      },
     });
 
     if (authError) {
@@ -42,20 +47,6 @@ export async function signup(formData: FormData) {
     if (!authData.user) {
       return { error: "회원가입에 실패했습니다" };
     }
-
-    // 2. 프로필 생성
-    const { error: profileError } = await supabase.from("user_profiles").insert({
-      user_id: authData.user.id,
-      nickname: validatedData.nickname,
-    });
-
-    if (profileError) {
-      console.error("Profile creation error:", profileError);
-      return { error: "프로필 생성에 실패했습니다" };
-    }
-
-    revalidatePath("/", "layout");
-    redirect("/");
   } catch (error) {
     if (error instanceof z.ZodError) {
       return { error: error.issues[0].message };
@@ -63,6 +54,10 @@ export async function signup(formData: FormData) {
     console.error("Signup error:", error);
     return { error: "회원가입 중 오류가 발생했습니다" };
   }
+
+  // redirect는 try-catch 밖에서 호출
+  revalidatePath("/", "layout");
+  redirect("/");
 }
 
 export async function login(formData: FormData) {
@@ -84,15 +79,16 @@ export async function login(formData: FormData) {
     if (error) {
       return { error: error.message };
     }
-
-    revalidatePath("/", "layout");
-    redirect("/");
   } catch (error) {
     if (error instanceof z.ZodError) {
       return { error: error.issues[0].message };
     }
     return { error: "로그인 중 오류가 발생했습니다" };
   }
+
+  // redirect는 try-catch 밖에서 호출
+  revalidatePath("/", "layout");
+  redirect("/");
 }
 
 export async function logout() {

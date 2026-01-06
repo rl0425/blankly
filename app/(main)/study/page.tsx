@@ -4,19 +4,16 @@ import { createClient } from "@/shared/lib/supabase/server";
 import { getProjects } from "@/features/study/actions/projects";
 import { Header } from "@/features/auth/components/Header";
 import { Navigation } from "@/features/auth/components/Navigation";
+import { CreateProjectModal } from "@/features/study/components/CreateProjectModal";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/shared/ui/components/card";
-import { Button } from "@/shared/ui/components/button";
 import { Plus } from "lucide-react";
 
 export default async function StudyPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  if (!user) {
-    redirect("/login");
-  }
-
-  const projects = await getProjects();
+  // 비로그인 사용자도 접근 가능 (빈 프로젝트 리스트 표시)
+  const projects = user ? await getProjects() : [];
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -30,10 +27,7 @@ export default async function StudyPage() {
               {projects.length}개의 프로젝트
             </p>
           </div>
-          <Button size="sm">
-            <Plus className="h-4 w-4 mr-2" />
-            새 프로젝트
-          </Button>
+          <CreateProjectModal />
         </div>
 
         {projects.length === 0 ? (
@@ -48,10 +42,7 @@ export default async function StudyPage() {
               <p className="text-muted-foreground mb-4">
                 PDF나 텍스트를 업로드하면 AI가 자동으로 문제를 만들어드려요
               </p>
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                프로젝트 생성
-              </Button>
+              <CreateProjectModal />
             </CardContent>
           </Card>
         ) : (

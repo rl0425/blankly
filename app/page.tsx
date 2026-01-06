@@ -4,35 +4,42 @@ import { getUserProfile } from "@/features/auth/actions/auth";
 import { getProjects } from "@/features/study/actions/projects";
 import { Header } from "@/features/auth/components/Header";
 import { Navigation } from "@/features/auth/components/Navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/components/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/shared/ui/components/card";
 import { BookOpen, CheckCircle, TrendingUp } from "lucide-react";
 
 export default async function HomePage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (!user) {
-    redirect("/login");
-  }
+  // 비로그인 사용자도 접근 가능
+  const profile = user ? await getUserProfile() : null;
+  const projects = user ? await getProjects() : [];
 
-  const profile = await getUserProfile();
-  const projects = await getProjects();
-
-  const accuracy = profile && profile.total_solved > 0
-    ? Math.round((profile.total_correct / profile.total_solved) * 100)
-    : 0;
+  const accuracy =
+    profile && profile.total_solved > 0
+      ? Math.round((profile.total_correct / profile.total_solved) * 100)
+      : 0;
 
   return (
     <div className="min-h-screen bg-background pb-20">
       <Header />
-      
+
       <main className="container mx-auto px-4 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold toss-heading mb-2">
-            안녕하세요, {profile?.nickname}님! 👋
+            {user ? `안녕하세요, ${profile?.nickname}님! 👋` : "안녕하세요! 👋"}
           </h1>
           <p className="text-muted-foreground toss-body">
-            오늘도 열심히 학습해볼까요?
+            {user
+              ? "오늘도 열심히 학습해볼까요?"
+              : "AI와 함께하는 스마트 빈칸 채우기 학습"}
           </p>
         </div>
 
@@ -44,7 +51,9 @@ export default async function HomePage() {
               <BookOpen className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{profile?.total_solved || 0}</div>
+              <div className="text-2xl font-bold">
+                {profile?.total_solved || 0}
+              </div>
               <p className="text-xs text-muted-foreground">지금까지 푼 문제</p>
             </CardContent>
           </Card>
@@ -55,7 +64,9 @@ export default async function HomePage() {
               <CheckCircle className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{profile?.total_correct || 0}</div>
+              <div className="text-2xl font-bold">
+                {profile?.total_correct || 0}
+              </div>
               <p className="text-xs text-muted-foreground">맞힌 문제 수</p>
             </CardContent>
           </Card>
@@ -84,13 +95,18 @@ export default async function HomePage() {
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
               {projects.slice(0, 4).map((project) => (
-                <Card key={project.id} className="hover:shadow-lg transition-shadow cursor-pointer">
+                <Card
+                  key={project.id}
+                  className="hover:shadow-lg transition-shadow cursor-pointer"
+                >
                   <CardHeader>
                     <CardTitle>{project.title}</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">{project.category}</span>
+                      <span className="text-muted-foreground">
+                        {project.category}
+                      </span>
                       <span className="text-primary font-medium">
                         {project.completed_rooms}/{project.total_rooms} Day
                       </span>
@@ -107,4 +123,3 @@ export default async function HomePage() {
     </div>
   );
 }
-

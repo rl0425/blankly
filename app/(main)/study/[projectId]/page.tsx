@@ -3,6 +3,8 @@ import Link from "next/link";
 import { createClient } from "@/shared/lib/supabase/server";
 import { getProject } from "@/features/study/actions/projects";
 import { getRoomsByProject } from "@/features/study/actions/rooms";
+import { CreateRoomModal } from "@/features/study/components/CreateRoomModal";
+import { RoomList } from "@/features/study/components/RoomList";
 import { Header } from "@/features/auth/components/Header";
 import { Navigation } from "@/features/auth/components/Navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/components/card";
@@ -30,6 +32,25 @@ export default async function ProjectDetailPage({
   if (!project) {
     redirect("/study");
   }
+
+  // 각 방의 완료 상태 확인 (room_sessions 조회)
+  const roomsWithCompletion = await Promise.all(
+    rooms.map(async (room) => {
+      const { data: session } = await supabase
+        .from("room_sessions")
+        .select("is_completed")
+        .eq("room_id", room.id)
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+
+      return {
+        ...room,
+        is_user_completed: session?.is_completed || false,
+      };
+    })
+  );
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -71,52 +92,13 @@ export default async function ProjectDetailPage({
         </Card>
 
         {/* Rooms List */}
-        <div className="space-y-3">
-          <h2 className="text-lg font-semibold mb-4">학습 Day</h2>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold">학습 방</h2>
+            <CreateRoomModal projectId={projectId} projectTitle={project.title} />
+          </div>
           
-          {rooms.length === 0 ? (
-            <Card>
-              <CardContent className="py-12 text-center text-muted-foreground">
-                <p>아직 생성된 Day가 없습니다.</p>
-                <p className="text-sm mt-2">곧 AI가 자동으로 Day를 생성해드릴 예정입니다!</p>
-              </CardContent>
-            </Card>
-          ) : (
-            rooms.map((room) => {
-              const StatusIcon = 
-                room.status === "completed" ? CheckCircle :
-                room.status === "in_progress" ? PlayCircle :
-                Circle;
-              
-              const statusColor =
-                room.status === "completed" ? "text-primary" :
-                room.status === "in_progress" ? "text-secondary" :
-                "text-muted-foreground";
-
-              return (
-                <Link key={room.id} href={`/study/${projectId}/${room.id}`}>
-                  <Card className="hover:shadow-md transition-shadow cursor-pointer">
-                    <CardContent className="flex items-center justify-between p-4">
-                      <div className="flex items-center gap-3">
-                        <StatusIcon className={`h-5 w-5 ${statusColor}`} />
-                        <div>
-                          <p className="font-medium">{room.title}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {room.total_problems}개 문제 · {room.difficulty}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        {room.status === "completed" ? "완료" :
-                         room.status === "in_progress" ? "진행 중" :
-                         "시작하기"}
-                      </div>
-                    </CardContent>
-                  </Card>
-                </Link>
-              );
-            })
-          )}
+          <RoomList rooms={roomsWithCompletion} projectId={projectId} />
         </div>
       </main>
 
