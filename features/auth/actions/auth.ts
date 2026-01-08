@@ -116,3 +116,39 @@ export async function getUserProfile() {
   return profile;
 }
 
+// 삭제되지 않은 항목만 포함한 실시간 통계 조회
+export async function getUserStats() {
+  const supabase = await createClient();
+  
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  if (!user) {
+    return { total_solved: 0, total_correct: 0 };
+  }
+
+  // 삭제되지 않은 rooms의 user_answers만 집계
+  const { data: answers } = await supabase
+    .from("user_answers")
+    .select(`
+      id,
+      is_correct,
+      room_id,
+      rooms!inner (
+        id,
+        deleted_at,
+        project_id,
+        projects!inner (
+          id,
+          deleted_at
+        )
+      )
+    `)
+    .eq("user_id", user.id)
+    .is("rooms.deleted_at", null)
+    .is("rooms.projects.deleted_at", null);
+
+  const total_solved = answers?.length || 0;
+  const total_correct = answers?.filter(a => a.is_correct).length || 0;
+
+  return { total_solved, total_correct };
+}

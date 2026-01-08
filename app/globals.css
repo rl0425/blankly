@@ -103,4 +103,22 @@
     line-height: 1.5;
     letter-spacing: -0.01em;
   }
+
+  /* 모든 버튼과 클릭 가능한 요소에 cursor-pointer */
+  button,
+  [role="button"],
+  [type="button"],
+  [type="submit"],
+  [type="reset"],
+  a,
+  select {
+    cursor: pointer;
+  }
+
+  /* 비활성화된 요소는 not-allowed */
+  button:disabled,
+  [role="button"]:disabled,
+  select:disabled {
+    cursor: not-allowed;
+  }
 }

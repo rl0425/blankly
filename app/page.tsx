@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/shared/lib/supabase/server";
-import { getUserProfile } from "@/features/auth/actions/auth";
+import { getUserProfile, getUserStats } from "@/features/auth/actions/auth";
 import { getProjects } from "@/features/study/actions/projects";
 import { Header } from "@/features/auth/components/Header";
 import { Navigation } from "@/features/auth/components/Navigation";
@@ -21,10 +21,11 @@ export default async function HomePage() {
   // 비로그인 사용자도 접근 가능
   const profile = user ? await getUserProfile() : null;
   const projects = user ? await getProjects() : [];
+  const stats = user ? await getUserStats() : { total_solved: 0, total_correct: 0 };
 
   const accuracy =
-    profile && profile.total_solved > 0
-      ? Math.round((profile.total_correct / profile.total_solved) * 100)
+    stats.total_solved > 0
+      ? Math.round((stats.total_correct / stats.total_solved) * 100)
       : 0;
 
   return (
@@ -52,7 +53,7 @@ export default async function HomePage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {profile?.total_solved || 0}
+                {stats.total_solved}
               </div>
               <p className="text-xs text-muted-foreground">지금까지 푼 문제</p>
             </CardContent>
@@ -65,7 +66,7 @@ export default async function HomePage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {profile?.total_correct || 0}
+                {stats.total_correct}
               </div>
               <p className="text-xs text-muted-foreground">맞힌 문제 수</p>
             </CardContent>

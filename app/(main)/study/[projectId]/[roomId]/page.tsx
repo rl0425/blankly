@@ -26,11 +26,13 @@ export default function RoomProblemPage({
   const [problems, setProblems] = useState<Problem[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [results, setResults] = useState<Record<string, { isCorrect: boolean; feedback?: any }>>({});
   const [showResult, setShowResult] = useState(false);
   const [isCorrect, setIsCorrect] = useState(false);
   const [aiFeedback, setAiFeedback] = useState<any>(null);
   const [initialLoading, setInitialLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
   
   const router = useRouter();
   const { toast } = useToast();
@@ -58,11 +60,11 @@ export default function RoomProblemPage({
       
       console.log(`${problemsData.length}개의 문제를 불러왔습니다`);
       setProblems(problemsData);
-    } catch (error: any) {
+    } catch (error) {
       console.error("데이터 로드 오류:", error);
       toast({
         title: "오류 발생",
-        description: error.message || "데이터를 불러올 수 없습니다",
+        description: error instanceof Error ? error.message : "데이터를 불러올 수 없습니다",
         variant: "destructive",
       });
     } finally {
@@ -119,17 +121,23 @@ export default function RoomProblemPage({
       setIsCorrect(correct);
       setAiFeedback(feedback);
       setShowResult(true);
+      
+      // 결과 저장
+      setResults({
+        ...results,
+        [currentProblem.id]: { isCorrect: correct, feedback },
+      });
 
       toast({
         title: correct ? "정답입니다! 🎉" : "틀렸습니다 😢",
         description: feedback?.feedback || (correct ? "다음 문제로 넘어가세요" : "다시 확인해보세요"),
         variant: correct ? "default" : "destructive",
       });
-    } catch (error: any) {
+    } catch (error) {
       console.error("답안 제출 오류:", error);
       toast({
         title: "오류 발생",
-        description: error.message || "답안 제출 중 문제가 발생했습니다",
+        description: error instanceof Error ? error.message : "답안 제출 중 문제가 발생했습니다",
         variant: "destructive",
       });
     } finally {
@@ -145,53 +153,94 @@ export default function RoomProblemPage({
     if (currentIndex < problems.length - 1) {
       setCurrentIndex(currentIndex + 1);
     } else {
-      // 모든 문제 완료 - 세션 저장
-      if (resolvedParams) {
-        setSubmitting(true);
-        
-        try {
-          // 통계 계산
-          const correctCount = Object.values(answers).filter((_, idx) => {
-            // 여기서는 간단히 제출된 답변 수만 계산 (실제 정답 여부는 서버에서 확인)
-            return true;
-          }).length;
-          
-          // 세션 완료 처리
-          const { completeRoomSession } = await import("@/features/problem/actions/problems");
-          await completeRoomSession(resolvedParams.roomId, {
-            totalProblems: problems.length,
-            solvedCount: Object.keys(answers).length,
-            correctCount: Object.keys(answers).length, // 임시로 제출한 문제 수
-            wrongCount: 0,
-          });
+      // 모든 문제 완료 - 완료 모달 표시
+      setShowCompletionModal(true);
+    }
+  };
 
-          toast({
-            title: "모든 문제를 완료했습니다! 🎉",
-            description: "수고하셨습니다!",
-          });
+  const handleCompleteSession = async () => {
+    if (!resolvedParams) return;
+    
+    setSubmitting(true);
+    
+    try {
+      // 통계 계산
+      const correctCount = Object.values(results).filter(r => r.isCorrect).length;
+      const wrongCount = Object.keys(results).length - correctCount;
+      
+      // 세션 완료 처리
+      const { completeRoomSession } = await import("@/features/problem/actions/problems");
+      await completeRoomSession(resolvedParams.roomId, {
+        totalProblems: problems.length,
+        solvedCount: Object.keys(answers).length,
+        correctCount,
+        wrongCount,
+      });
 
-          router.push(`/study/${resolvedParams.projectId}`);
-        } catch (error) {
-          console.error("세션 완료 처리 오류:", error);
-          toast({
-            title: "완료 처리 중 오류 발생",
-            description: "하지만 답변은 저장되었습니다",
-            variant: "destructive",
-          });
-          router.push(`/study/${resolvedParams.projectId}`);
-        } finally {
-          setSubmitting(false);
-        }
-      }
+      toast({
+        title: "학습을 완료했습니다! 🎉",
+        description: "수고하셨습니다!",
+      });
+
+      router.push(`/study/${resolvedParams.projectId}`);
+    } catch (error) {
+      console.error("세션 완료 처리 오류:", error);
+      toast({
+        title: "완료 처리 중 오류 발생",
+        description: "하지만 답변은 저장되었습니다",
+        variant: "destructive",
+      });
+      router.push(`/study/${resolvedParams.projectId}`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleRetry = () => {
+    // 다시 풀어보기 - 상태 초기화
+    setAnswers({});
+    setResults({});
+    setCurrentIndex(0);
+    setShowCompletionModal(false);
+    setShowResult(false);
+    setIsCorrect(false);
+    setAiFeedback(null);
+  };
+
+  const handleReviewWrong = () => {
+    // 틀린 문제만 보기 - 첫 번째 틀린 문제로 이동
+    const wrongProblemIndex = problems.findIndex(p => {
+      const result = results[p.id];
+      return result && !result.isCorrect;
+    });
+    
+    if (wrongProblemIndex !== -1) {
+      setCurrentIndex(wrongProblemIndex);
+      setShowCompletionModal(false);
+      setShowResult(true);
+      const problem = problems[wrongProblemIndex];
+      setIsCorrect(results[problem.id].isCorrect);
+      setAiFeedback(results[problem.id].feedback);
     }
   };
 
   const handlePrevious = () => {
     if (currentIndex > 0) {
-      setShowResult(false);
-      setIsCorrect(false);
-      setAiFeedback(null);
-      setCurrentIndex(currentIndex - 1);
+      const prevIndex = currentIndex - 1;
+      const prevProblem = problems[prevIndex];
+      
+      // 이전 문제의 결과가 있으면 복원
+      if (results[prevProblem.id]) {
+        setShowResult(true);
+        setIsCorrect(results[prevProblem.id].isCorrect);
+        setAiFeedback(results[prevProblem.id].feedback);
+      } else {
+        setShowResult(false);
+        setIsCorrect(false);
+        setAiFeedback(null);
+      }
+      
+      setCurrentIndex(prevIndex);
     }
   };
 
@@ -217,14 +266,21 @@ export default function RoomProblemPage({
       }
 
       setIsCorrect(true);
+      
+      // 결과 업데이트
+      setResults({
+        ...results,
+        [currentProblem.id]: { isCorrect: true, feedback: aiFeedback },
+      });
+      
       toast({
         title: "정답으로 처리되었습니다 ✅",
         description: "다음 문제로 넘어가세요",
       });
-    } catch (error: any) {
+    } catch (error) {
       toast({
         title: "오류 발생",
-        description: error.message || "정답 처리 중 문제가 발생했습니다",
+        description: error instanceof Error ? error.message : "정답 처리 중 문제가 발생했습니다",
         variant: "destructive",
       });
     } finally {
@@ -308,11 +364,22 @@ export default function RoomProblemPage({
 
         {/* Progress */}
         <div className="mb-6">
-          <div className="flex justify-between text-sm mb-2">
+          <div className="flex justify-between items-center text-sm mb-2">
             <span className="font-medium">{room.title}</span>
-            <span className="text-muted-foreground">
-              {currentIndex + 1}/{problems.length}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-1 text-xs rounded-full bg-primary/10 text-primary font-medium">
+                {currentProblem.question_type === "fill_blank" 
+                  ? "주관식-빈칸" 
+                  : currentProblem.question_type === "essay"
+                  ? "주관식-서술형"
+                  : currentProblem.question_type === "multiple_select" 
+                  ? "복수선택" 
+                  : "객관식"}
+              </span>
+              <span className="text-muted-foreground">
+                {currentIndex + 1}/{problems.length}
+              </span>
+            </div>
           </div>
           <Progress value={progress} />
         </div>
@@ -330,6 +397,7 @@ export default function RoomProblemPage({
             value={answers[currentProblem.id] || ""}
             onChange={handleAnswer}
             disabled={showResult}
+            onSubmit={showResult ? handleNext : handleSubmit}
           />
         </ProblemCard>
 
@@ -399,12 +467,80 @@ export default function RoomProblemPage({
           )}
         </div>
 
-        {/* Debug Info */}
-        <div className="mt-4 text-xs text-muted-foreground text-center">
-          문제 ID: {currentProblem.id.slice(0, 8)}... | 
-          유형: {currentProblem.question_type === "fill_blank" ? "주관식" : "객관식"}
-        </div>
       </main>
+
+      {/* 완료 모달 */}
+      {showCompletionModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-background rounded-2xl max-w-md w-full p-6 space-y-6">
+            {/* 헤더 */}
+            <div className="text-center space-y-2">
+              <div className="text-6xl mb-4">🎉</div>
+              <h2 className="text-2xl font-bold">학습 완료!</h2>
+              <p className="text-muted-foreground">
+                {room?.title}의 모든 문제를 풀었습니다
+              </p>
+            </div>
+
+            {/* 결과 요약 */}
+            <div className="grid grid-cols-3 gap-4">
+              <div className="text-center p-4 rounded-xl bg-muted">
+                <p className="text-2xl font-bold">{problems.length}</p>
+                <p className="text-sm text-muted-foreground">총 문제</p>
+              </div>
+              <div className="text-center p-4 rounded-xl bg-primary/10">
+                <p className="text-2xl font-bold text-primary">
+                  {Object.values(results).filter(r => r.isCorrect).length}
+                </p>
+                <p className="text-sm text-muted-foreground">정답</p>
+              </div>
+              <div className="text-center p-4 rounded-xl bg-destructive/10">
+                <p className="text-2xl font-bold text-destructive">
+                  {Object.keys(results).length - Object.values(results).filter(r => r.isCorrect).length}
+                </p>
+                <p className="text-sm text-muted-foreground">오답</p>
+              </div>
+            </div>
+
+            {/* 정답률 */}
+            <div className="text-center p-4 rounded-xl bg-muted/50">
+              <p className="text-3xl font-bold text-primary">
+                {Math.round((Object.values(results).filter(r => r.isCorrect).length / problems.length) * 100)}%
+              </p>
+              <p className="text-sm text-muted-foreground">정답률</p>
+            </div>
+
+            {/* 버튼들 */}
+            <div className="space-y-3">
+              {Object.values(results).some(r => !r.isCorrect) && (
+                <Button
+                  onClick={handleReviewWrong}
+                  variant="outline"
+                  className="w-full"
+                >
+                  ❌ 틀린 문제 다시 보기
+                </Button>
+              )}
+              
+              <Button
+                onClick={handleRetry}
+                variant="outline"
+                className="w-full"
+              >
+                🔄 처음부터 다시 풀기
+              </Button>
+              
+              <Button
+                onClick={handleCompleteSession}
+                disabled={submitting}
+                className="w-full"
+              >
+                {submitting ? "완료 처리 중..." : "✅ 완료하고 나가기"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <Navigation />
     </div>

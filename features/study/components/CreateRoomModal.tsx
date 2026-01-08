@@ -15,63 +15,122 @@ interface CreateRoomModalProps {
 type GenerationMode = "user_data" | "hybrid" | "ai_only";
 type GradingStrictness = "strict" | "normal" | "lenient";
 
-export function CreateRoomModal({ projectId, projectTitle }: CreateRoomModalProps) {
+export function CreateRoomModal({
+  projectId,
+  projectTitle,
+}: CreateRoomModalProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
-  
+  const [usePreviousSettings, setUsePreviousSettings] = useState(false);
+  const [isLoadingSettings, setIsLoadingSettings] = useState(false);
+
+  // 에러 상태
+  const [titleError, setTitleError] = useState("");
+  const [sourceDataError, setSourceDataError] = useState("");
+
   // 기본 설정
   const [title, setTitle] = useState("");
-  const [generationMode, setGenerationMode] = useState<GenerationMode>("user_data");
+  const [generationMode, setGenerationMode] =
+    useState<GenerationMode>("user_data");
   const [sourceData, setSourceData] = useState("");
   const [problemCount, setProblemCount] = useState(10);
-  const [difficulty, setDifficulty] = useState<"easy" | "medium" | "hard">("medium");
-  
+  const [difficulty, setDifficulty] = useState<"easy" | "medium" | "hard">(
+    "medium"
+  );
+
   // 고급 설정
   const [fillBlankRatio, setFillBlankRatio] = useState(60);
-  const [gradingStrictness, setGradingStrictness] = useState<GradingStrictness>("normal");
+  const [subjectiveType, setSubjectiveType] = useState<
+    "fill_blank" | "essay" | "both"
+  >("both");
+  const [gradingStrictness, setGradingStrictness] =
+    useState<GradingStrictness>("normal");
   const [aiPrompt, setAiPrompt] = useState("");
-  
+
   const router = useRouter();
   const { toast } = useToast();
+
+  // 이전 설정 불러오기
+  const handleLoadPreviousSettings = async () => {
+    if (!usePreviousSettings) return;
+
+    setIsLoadingSettings(true);
+    try {
+      const { getLastRoomSettings } = await import("@/features/study/actions/rooms");
+      const settings = await getLastRoomSettings(projectId);
+
+      if (settings) {
+        // 제목 제외하고 모든 설정 불러오기
+        if (settings.source_data) setSourceData(settings.source_data);
+        if (settings.total_problems) setProblemCount(settings.total_problems);
+        if (settings.difficulty) setDifficulty(settings.difficulty as "easy" | "medium" | "hard");
+        if (settings.generation_mode) setGenerationMode(settings.generation_mode as GenerationMode);
+        if (settings.fill_blank_ratio) setFillBlankRatio(settings.fill_blank_ratio);
+        if (settings.grading_strictness) setGradingStrictness(settings.grading_strictness as GradingStrictness);
+
+        toast({
+          title: "이전 설정을 불러왔습니다",
+          description: "제목은 직접 입력해주세요",
+        });
+      } else {
+        toast({
+          title: "이전 방이 없습니다",
+          description: "이 프로젝트의 첫 번째 방을 만들어주세요",
+          variant: "destructive",
+        });
+        setUsePreviousSettings(false);
+      }
+    } catch (error) {
+      toast({
+        title: "설정 불러오기 실패",
+        description: "다시 시도해주세요",
+        variant: "destructive",
+      });
+      setUsePreviousSettings(false);
+    } finally {
+      setIsLoadingSettings(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // 에러 초기화
+    setTitleError("");
+    setSourceDataError("");
+
     // 유효성 검사
+    let hasError = false;
+
     if (!title.trim()) {
-      toast({
-        title: "방 제목을 입력하세요",
-        variant: "destructive",
-      });
+      setTitleError("방 제목을 입력하세요");
+      document.getElementById("title")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      hasError = true;
+    }
+
+    if (
+      (generationMode === "user_data" || generationMode === "hybrid") &&
+      !sourceData.trim()
+    ) {
+      setSourceDataError("최소 100자 이상의 학습 내용을 입력해주세요");
+      if (!hasError) {
+        document.getElementById("sourceData")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+      hasError = true;
+    } else if (sourceData.trim().length < 100 && generationMode !== "ai_only") {
+      setSourceDataError(`최소 100자 이상 입력해주세요 (현재 ${sourceData.trim().length}자)`);
+      if (!hasError) {
+        document.getElementById("sourceData")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+      hasError = true;
+    }
+
+    if (hasError) {
       return;
     }
 
-    if ((generationMode === "user_data" || generationMode === "hybrid") && !sourceData.trim()) {
-      toast({
-        title: "학습 자료를 입력하세요",
-        description: "최소 100자 이상의 학습 내용을 입력해주세요",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (sourceData.trim().length < 100 && generationMode !== "ai_only") {
-      toast({
-        title: "학습 자료가 너무 짧습니다",
-        description: "최소 100자 이상 입력해주세요",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (generationMode === "ai_only" && !aiPrompt.trim()) {
-      toast({
-        title: "AI 프롬프트를 입력하세요",
-        variant: "destructive",
-      });
-      return;
-    }
+    // AI 전체 생성 모드에서는 프롬프트가 선택적 (프로젝트 기본 프롬프트 사용 가능)
 
     setIsLoading(true);
 
@@ -88,6 +147,7 @@ export function CreateRoomModal({ projectId, projectTitle }: CreateRoomModalProp
           problemCount,
           difficulty,
           fillBlankRatio,
+          subjectiveType,
           gradingStrictness,
         }),
       });
@@ -117,11 +177,14 @@ export function CreateRoomModal({ projectId, projectTitle }: CreateRoomModalProp
       setFillBlankRatio(60);
       setGradingStrictness("normal");
       setShowAdvanced(false);
-    } catch (error: any) {
+      setTitleError("");
+      setSourceDataError("");
+    } catch (error) {
       console.error("Room creation error:", error);
       toast({
         title: "방 생성 실패",
-        description: error.message || "오류가 발생했습니다",
+        description:
+          error instanceof Error ? error.message : "오류가 발생했습니다",
         variant: "destructive",
       });
     } finally {
@@ -137,12 +200,14 @@ export function CreateRoomModal({ projectId, projectTitle }: CreateRoomModalProp
 
       {isOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-background rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-background rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto relative">
             {/* Header */}
             <div className="sticky top-0 bg-background border-b px-6 py-4 flex items-center justify-between">
               <div>
                 <h2 className="text-xl font-bold">새 방 만들기</h2>
-                <p className="text-sm text-muted-foreground mt-1">{projectTitle}</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {projectTitle}
+                </p>
               </div>
               <Button
                 variant="ghost"
@@ -156,6 +221,26 @@ export function CreateRoomModal({ projectId, projectTitle }: CreateRoomModalProp
 
             {/* Content */}
             <form onSubmit={handleSubmit} className="p-6 space-y-6">
+              {/* 이전 설정 불러오기 체크박스 */}
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50">
+                <input
+                  type="checkbox"
+                  id="usePreviousSettings"
+                  checked={usePreviousSettings}
+                  onChange={(e) => {
+                    setUsePreviousSettings(e.target.checked);
+                    if (e.target.checked) {
+                      handleLoadPreviousSettings();
+                    }
+                  }}
+                  disabled={isLoading || isLoadingSettings}
+                  className="w-4 h-4"
+                />
+                <Label htmlFor="usePreviousSettings" className="text-sm cursor-pointer">
+                  {isLoadingSettings ? "설정 불러오는 중..." : "이전 방 설정 사용하기"}
+                </Label>
+              </div>
+
               {/* 방 제목 */}
               <div className="space-y-2">
                 <Label htmlFor="title">
@@ -165,11 +250,19 @@ export function CreateRoomModal({ projectId, projectTitle }: CreateRoomModalProp
                   id="title"
                   type="text"
                   value={title}
-                  onChange={(e) => setTitle(e.target.value)}
+                  onChange={(e) => {
+                    setTitle(e.target.value);
+                    if (titleError) setTitleError("");
+                  }}
                   placeholder="예: Day 1: 토익 RC 기초"
-                  className="flex h-11 w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm"
+                  className={`flex h-11 w-full rounded-xl border ${
+                    titleError ? "border-destructive" : "border-input"
+                  } bg-background px-4 py-2.5 text-sm`}
                   disabled={isLoading}
                 />
+                {titleError && (
+                  <p className="text-sm text-destructive">{titleError}</p>
+                )}
               </div>
 
               {/* 생성 모드 */}
@@ -178,11 +271,13 @@ export function CreateRoomModal({ projectId, projectTitle }: CreateRoomModalProp
                   📚 학습 자료 선택 <span className="text-destructive">*</span>
                 </Label>
                 <div className="space-y-2">
-                  <label className={`flex items-center gap-3 p-4 border rounded-xl cursor-pointer transition-all ${
-                    generationMode === "user_data" 
-                      ? "border-primary bg-primary/5 shadow-sm" 
-                      : "border-input hover:border-primary/50"
-                  }`}>
+                  <label
+                    className={`flex items-center gap-3 p-4 border rounded-xl cursor-pointer transition-all ${
+                      generationMode === "user_data"
+                        ? "border-primary bg-primary/5 shadow-sm"
+                        : "border-input hover:border-primary/50"
+                    }`}
+                  >
                     <input
                       type="radio"
                       name="mode"
@@ -199,11 +294,13 @@ export function CreateRoomModal({ projectId, projectTitle }: CreateRoomModalProp
                     </div>
                   </label>
 
-                  <label className={`flex items-center gap-3 p-4 border rounded-xl cursor-pointer transition-all ${
-                    generationMode === "hybrid" 
-                      ? "border-primary bg-primary/5 shadow-sm" 
-                      : "border-input hover:border-primary/50"
-                  }`}>
+                  <label
+                    className={`flex items-center gap-3 p-4 border rounded-xl cursor-pointer transition-all ${
+                      generationMode === "hybrid"
+                        ? "border-primary bg-primary/5 shadow-sm"
+                        : "border-input hover:border-primary/50"
+                    }`}
+                  >
                     <input
                       type="radio"
                       name="mode"
@@ -220,11 +317,13 @@ export function CreateRoomModal({ projectId, projectTitle }: CreateRoomModalProp
                     </div>
                   </label>
 
-                  <label className={`flex items-center gap-3 p-4 border rounded-xl cursor-pointer transition-all ${
-                    generationMode === "ai_only" 
-                      ? "border-primary bg-primary/5 shadow-sm" 
-                      : "border-input hover:border-primary/50"
-                  }`}>
+                  <label
+                    className={`flex items-center gap-3 p-4 border rounded-xl cursor-pointer transition-all ${
+                      generationMode === "ai_only"
+                        ? "border-primary bg-primary/5 shadow-sm"
+                        : "border-input hover:border-primary/50"
+                    }`}
+                  >
                     <input
                       type="radio"
                       name="mode"
@@ -243,8 +342,30 @@ export function CreateRoomModal({ projectId, projectTitle }: CreateRoomModalProp
                 </div>
               </div>
 
+              {/* AI 전체 생성 주의사항 */}
+              {generationMode === "ai_only" && (
+                <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50">
+                  <div className="flex gap-3">
+                    <div className="text-amber-600 dark:text-amber-500 text-lg mt-0.5">
+                      ⚠️
+                    </div>
+                    <div className="flex-1 space-y-2">
+                      <p className="font-medium text-amber-900 dark:text-amber-100 text-sm">
+                        AI 생성 문제 주의사항
+                      </p>
+                      <ul className="text-xs text-amber-800 dark:text-amber-200 space-y-1 list-disc list-inside">
+                        <li>AI가 생성한 문제나 정답이 정확하지 않을 수 있습니다</li>
+                        <li>애매하거나 틀린 경우 직접 확인하는 작업이 필요합니다</li>
+                        <li>대부분 정확하지만, 학습 시 주의해서 검토해 주세요</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* 학습 자료 입력 (user_data, hybrid 모드) */}
-              {(generationMode === "user_data" || generationMode === "hybrid") && (
+              {(generationMode === "user_data" ||
+                generationMode === "hybrid") && (
                 <div className="space-y-2">
                   <Label htmlFor="sourceData">
                     학습 내용 <span className="text-destructive">*</span>
@@ -252,11 +373,19 @@ export function CreateRoomModal({ projectId, projectTitle }: CreateRoomModalProp
                   <textarea
                     id="sourceData"
                     value={sourceData}
-                    onChange={(e) => setSourceData(e.target.value)}
+                    onChange={(e) => {
+                      setSourceData(e.target.value);
+                      if (sourceDataError) setSourceDataError("");
+                    }}
                     placeholder="학습할 내용을 입력하세요... (최소 100자)&#10;&#10;예시:&#10;React는 사용자 인터페이스를 구축하기 위한 JavaScript 라이브러리입니다.&#10;컴포넌트 기반 아키텍처를 사용하며, 가상 DOM을 통해 효율적인 렌더링을 제공합니다.&#10;..."
-                    className="flex w-full rounded-xl border border-input bg-background px-4 py-3 text-sm min-h-[200px] resize-y"
+                    className={`flex w-full rounded-xl border ${
+                      sourceDataError ? "border-destructive" : "border-input"
+                    } bg-background px-4 py-3 text-sm min-h-[200px] resize-y`}
                     disabled={isLoading}
                   />
+                  {sourceDataError && (
+                    <p className="text-sm text-destructive">{sourceDataError}</p>
+                  )}
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
                     <span>{sourceData.length}자 / 최소 100자</span>
                     <Button
@@ -276,17 +405,18 @@ export function CreateRoomModal({ projectId, projectTitle }: CreateRoomModalProp
               {/* AI 프롬프트 (ai_only 모드) */}
               {generationMode === "ai_only" && (
                 <div className="space-y-2">
-                  <Label htmlFor="aiPrompt">
-                    AI 프롬프트 <span className="text-destructive">*</span>
-                  </Label>
+                  <Label htmlFor="aiPrompt">AI 프롬프트 (선택)</Label>
                   <textarea
                     id="aiPrompt"
                     value={aiPrompt}
                     onChange={(e) => setAiPrompt(e.target.value)}
-                    placeholder="AI가 어떤 문제를 만들어야 할지 알려주세요...&#10;&#10;예시:&#10;- 토익 RC Part 5 문법 문제&#10;- 비즈니스 영어 위주&#10;- 동사 시제 관련 문제 많이"
+                    placeholder="추가 지시사항을 입력하세요... (비워두면 프로젝트 기본 프롬프트 사용)&#10;&#10;예시:&#10;- 토익 RC Part 5 문법 문제&#10;- 비즈니스 영어 위주&#10;- 동사 시제 관련 문제 많이"
                     className="flex w-full rounded-xl border border-input bg-background px-4 py-3 text-sm min-h-[120px] resize-y"
                     disabled={isLoading}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    💡 프로젝트의 기본 프롬프트가 자동으로 사용됩니다
+                  </p>
                 </div>
               )}
 
@@ -361,7 +491,9 @@ export function CreateRoomModal({ projectId, projectTitle }: CreateRoomModalProp
                           max="100"
                           step="10"
                           value={fillBlankRatio}
-                          onChange={(e) => setFillBlankRatio(Number(e.target.value))}
+                          onChange={(e) =>
+                            setFillBlankRatio(Number(e.target.value))
+                          }
                           className="w-full"
                           disabled={isLoading}
                         />
@@ -371,9 +503,51 @@ export function CreateRoomModal({ projectId, projectTitle }: CreateRoomModalProp
                       </div>
                     </div>
 
+                    {/* 주관식 문제 유형 선택 */}
+                    {fillBlankRatio > 0 && (
+                      <div className="space-y-2">
+                        <Label>주관식 문제 유형</Label>
+                        <div className="space-y-2">
+                          <label className="flex items-center gap-2 text-sm">
+                            <input
+                              type="radio"
+                              name="subjectiveType"
+                              checked={subjectiveType === "fill_blank"}
+                              onChange={() => setSubjectiveType("fill_blank")}
+                              disabled={isLoading}
+                            />
+                            <span>빈칸 채우기만</span>
+                          </label>
+                          <label className="flex items-center gap-2 text-sm">
+                            <input
+                              type="radio"
+                              name="subjectiveType"
+                              checked={subjectiveType === "essay"}
+                              onChange={() => setSubjectiveType("essay")}
+                              disabled={isLoading}
+                            />
+                            <span>서술형만 (면접형)</span>
+                          </label>
+                          <label className="flex items-center gap-2 text-sm">
+                            <input
+                              type="radio"
+                              name="subjectiveType"
+                              checked={subjectiveType === "both"}
+                              onChange={() => setSubjectiveType("both")}
+                              disabled={isLoading}
+                            />
+                            <span>둘 다 (빈칸 60~70%, 서술형 30~40%)</span>
+                          </label>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          💡 서술형 문제는 AI가 채점하며, 50~100자 이내로 답변합니다
+                        </p>
+                      </div>
+                    )}
+
                     {/* 주관식 채점 기준 */}
                     <div className="space-y-2">
-                      <Label>주관식 채점 기준</Label>
+                      <Label>주관식 채점 기준 (빈칸 채우기용)</Label>
                       <div className="space-y-2">
                         <label className="flex items-center gap-2 text-sm">
                           <input
@@ -393,7 +567,9 @@ export function CreateRoomModal({ projectId, projectTitle }: CreateRoomModalProp
                             onChange={() => setGradingStrictness("normal")}
                             disabled={isLoading}
                           />
-                          <span>보통 (의미가 유사하면 정답) <span className="text-primary">← 추천</span></span>
+                          <span>
+                            보통 (의미가 유사하면 정답)
+                          </span>
                         </label>
                         <label className="flex items-center gap-2 text-sm">
                           <input
@@ -422,15 +598,33 @@ export function CreateRoomModal({ projectId, projectTitle }: CreateRoomModalProp
                 >
                   취소
                 </Button>
-                <Button
-                  type="submit"
-                  disabled={isLoading}
-                  className="flex-1"
-                >
-                  {isLoading ? "문제 생성 중..." : `문제 ${problemCount}개 생성하기`}
+                <Button type="submit" disabled={isLoading} className="flex-1">
+                  {isLoading
+                    ? "문제 생성 중..."
+                    : `문제 ${problemCount}개 생성하기`}
                 </Button>
               </div>
             </form>
+
+            {/* 로딩 오버레이 */}
+            {isLoading && (
+              <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-[100]">
+                <div className="flex flex-col items-center gap-4 p-8 bg-card rounded-xl shadow-lg">
+                  <div className="relative w-16 h-16">
+                    <div className="absolute inset-0 border-4 border-primary/20 rounded-full"></div>
+                    <div className="absolute inset-0 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+                  </div>
+                  <div className="text-center space-y-2">
+                    <p className="text-lg font-semibold">
+                      AI가 문제를 생성하고 있습니다...
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {problemCount}개의 문제를 만들고 있어요 (약 10~30초 소요)
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

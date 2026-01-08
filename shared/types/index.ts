@@ -55,7 +55,7 @@ export interface Room {
 }
 
 // Problem Types
-export type QuestionType = 'multiple_choice' | 'multiple_select' | 'fill_blank';
+export type QuestionType = 'multiple_choice' | 'multiple_select' | 'fill_blank' | 'essay';
 
 export interface Problem {
   id: string;
@@ -67,6 +67,7 @@ export interface Problem {
   explanation?: string;
   difficulty: Difficulty;
   order_number: number;
+  max_length?: number; // 서술형 문제용 최대 글자 수 (예: 50, 100)
   created_at: string;
   metadata?: Record<string, unknown>;
 }

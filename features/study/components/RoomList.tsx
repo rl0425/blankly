@@ -90,10 +90,10 @@ export function RoomList({ rooms, projectId }: RoomListProps) {
 
       setSelectedRooms(new Set());
       router.refresh();
-    } catch (error: any) {
+    } catch (error) {
       toast({
         title: "삭제 실패",
-        description: error.message || "방 삭제 중 오류가 발생했습니다",
+        description: error instanceof Error ? error.message : "방 삭제 중 오류가 발생했습니다",
         variant: "destructive",
       });
     } finally {
@@ -121,7 +121,7 @@ export function RoomList({ rooms, projectId }: RoomListProps) {
   const someSelected = selectedRooms.size > 0;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 relative">
       {/* 선택 모드 컨트롤 */}
       <div className="flex items-center justify-between bg-muted/50 p-3 rounded-lg">
         <div className="flex items-center gap-3">
@@ -173,9 +173,9 @@ export function RoomList({ rooms, projectId }: RoomListProps) {
         />
       ))}
 
-      {/* 일괄 삭제 중 로딩 오버레이 */}
+      {/* 일괄 삭제 중 로딩 오버레이 (리스트만 덮기) */}
       {isDeleting && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50">
+        <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50 rounded-lg">
           <div className="flex flex-col items-center gap-4">
             <div className="relative w-16 h-16">
               <div className="absolute inset-0 border-4 border-destructive/20 rounded-full"></div>

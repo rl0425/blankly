@@ -4,12 +4,14 @@ import { Input } from "@/shared/ui/components/input";
 import { Label } from "@/shared/ui/components/label";
 import { Button } from "@/shared/ui/components/button";
 import type { Problem } from "@/shared/types";
+import { parseCodeInText } from "../lib/parseCode";
 
 interface AnswerInputProps {
   problem: Problem;
   value: string;
   onChange: (value: string) => void;
   disabled?: boolean;
+  onSubmit?: () => void;
 }
 
 export function AnswerInput({
@@ -17,6 +19,7 @@ export function AnswerInput({
   value,
   onChange,
   disabled,
+  onSubmit,
 }: AnswerInputProps) {
   // 복수 선택 객관식
   if (problem.question_type === "multiple_select" && problem.options) {
@@ -44,14 +47,14 @@ export function AnswerInput({
               key={index}
               type="button"
               variant={isSelected ? "default" : "outline"}
-              className="w-full justify-start h-auto py-3 px-4"
+              className="w-full justify-start h-auto min-h-[48px] max-h-[160px] py-3 px-4 whitespace-normal text-left leading-relaxed overflow-y-auto"
               onClick={() => handleToggle(option)}
               disabled={disabled}
             >
-              <span className="mr-3 font-bold">
+              <span className="mr-3 font-bold flex-shrink-0">
                 {isSelected ? "☑" : "☐"} {String.fromCharCode(65 + index)}.
               </span>
-              {option}
+              <span className="flex-1">{parseCodeInText(option)}</span>
             </Button>
           );
         })}
@@ -68,31 +71,69 @@ export function AnswerInput({
             key={index}
             type="button"
             variant={value === option ? "default" : "outline"}
-            className="w-full justify-start h-auto py-3 px-4"
+            className="w-full justify-start h-auto min-h-[48px] max-h-[160px] py-3 px-4 whitespace-normal text-left leading-relaxed overflow-y-auto"
             onClick={() => onChange(option)}
             disabled={disabled}
           >
-            <span className="mr-3 font-bold">
+            <span className="mr-3 font-bold flex-shrink-0">
               {String.fromCharCode(65 + index)}.
             </span>
-            {option}
+            <span className="flex-1">{parseCodeInText(option)}</span>
           </Button>
         ))}
       </div>
     );
   }
 
-  // Fill in the blank
+  // 주관식 (빈칸 채우기 or 서술형)
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !disabled && onSubmit) {
+      // Textarea에서는 Shift+Enter만 줄바꿈, Enter는 제출
+      if (problem.question_type === "essay" && !e.shiftKey) {
+        e.preventDefault();
+        onSubmit();
+      } else if (problem.question_type === "fill_blank") {
+        e.preventDefault();
+        onSubmit();
+      }
+    }
+  };
+
+  // 서술형 (essay)
+  if (problem.question_type === "essay") {
+    return (
+      <div className="space-y-2">
+        <textarea
+          id="answer"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="답을 입력하세요 (Enter: 제출, Shift+Enter: 줄바꿈)"
+          disabled={disabled}
+          className="flex w-full rounded-xl border border-input bg-background px-4 py-3 text-base resize-y min-h-[120px]"
+          autoFocus
+        />
+        {problem.max_length && (
+          <p className="text-xs text-muted-foreground text-right">
+            {value.length} / {problem.max_length}자
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  // 빈칸 채우기 (fill_blank)
   return (
     <div className="space-y-2">
-      <Label htmlFor="answer">답변을 입력하세요</Label>
       <Input
         id="answer"
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onKeyDown={handleKeyDown}
         placeholder="답을 입력하세요"
         disabled={disabled}
         className="text-lg"
+        autoFocus
       />
     </div>
   );

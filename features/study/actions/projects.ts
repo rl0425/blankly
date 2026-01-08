@@ -72,6 +72,7 @@ export async function getProjects() {
     .select("*")
     .eq("user_id", user.id)
     .eq("is_active", true)
+    .is("deleted_at", null)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -89,6 +90,7 @@ export async function getProject(projectId: string) {
     .from("projects")
     .select("*")
     .eq("id", projectId)
+    .is("deleted_at", null)
     .single();
 
   if (error) {
@@ -102,9 +104,14 @@ export async function getProject(projectId: string) {
 export async function deleteProject(projectId: string) {
   const supabase = await createClient();
 
+  const now = new Date().toISOString();
+
   const { error } = await supabase
     .from("projects")
-    .update({ is_active: false })
+    .update({ 
+      deleted_at: now,
+      is_active: false 
+    })
     .eq("id", projectId);
 
   if (error) {

@@ -26,10 +26,10 @@ export async function POST(request: NextRequest) {
       isCorrect: result.isCorrect,
       aiFeedback: result.aiFeedback,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Submit answer error:", error);
     return NextResponse.json(
-      { error: error.message || "서버 오류가 발생했습니다" },
+      { error: error instanceof Error ? error.message : "서버 오류가 발생했습니다" },
       { status: 500 }
     );
   }
