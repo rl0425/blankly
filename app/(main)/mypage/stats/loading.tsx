@@ -1,13 +1,8 @@
-import { Header } from "@/features/auth/components/Header";
-import { Navigation } from "@/features/auth/components/Navigation";
 import { Card, CardContent, CardHeader } from "@/shared/ui/components/card";
 
 export default function StatsLoading() {
   return (
-    <div className="min-h-screen bg-background pb-20">
-      <Header />
-      
-      <main className="container mx-auto px-4 py-8">
+    <main className="container mx-auto px-4 py-8">
         {/* Header with Back Button Skeleton */}
         <div className="flex items-center gap-4 mb-8">
           <div className="h-10 w-10 bg-muted rounded animate-pulse" />
@@ -38,8 +33,5 @@ export default function StatsLoading() {
           </Card>
         </div>
       </main>
-
-      <Navigation />
-    </div>
   );
 }

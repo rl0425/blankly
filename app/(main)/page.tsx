@@ -1,10 +1,7 @@
-import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/shared/lib/supabase/server";
 import { getUserProfile, getUserStats } from "@/features/auth/actions/auth";
 import { getProjects } from "@/features/study/actions/projects";
-import { Header } from "@/features/auth/components/Header";
-import { Navigation } from "@/features/auth/components/Navigation";
 import {
   Card,
   CardContent,
@@ -30,10 +27,7 @@ export default async function HomePage() {
       : 0;
 
   return (
-    <div className="min-h-screen bg-background pb-20">
-      <Header />
-
-      <main className="container mx-auto px-4 py-8">
+    <main className="container mx-auto px-4 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold toss-heading mb-2">
             {user ? `안녕하세요, ${profile?.nickname}님! 👋` : "안녕하세요! 👋"}
@@ -118,9 +112,6 @@ export default async function HomePage() {
             </div>
           )}
         </div>
-      </main>
-
-      <Navigation />
-    </div>
+    </main>
   );
 }

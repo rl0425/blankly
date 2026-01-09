@@ -27,10 +27,13 @@ export function Navigation() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-16 items-center justify-around px-4">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60 isolate">
+      <div className="container flex h-16 items-center justify-around px-4 mx-auto">
         {navItems.map((item) => {
-          const isActive = pathname === item.href;
+          // /study로 시작하는 경로도 "학습" 탭 활성화
+          const isActive = item.href === "/study" 
+            ? pathname === item.href || pathname.startsWith("/study")
+            : pathname === item.href;
           const Icon = item.icon;
 
           return (

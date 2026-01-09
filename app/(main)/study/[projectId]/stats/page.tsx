@@ -3,8 +3,6 @@ import Link from "next/link";
 import { createClient } from "@/shared/lib/supabase/server";
 import { getProject } from "@/features/study/actions/projects";
 import { getRoomsByProject } from "@/features/study/actions/rooms";
-import { Header } from "@/features/auth/components/Header";
-import { Navigation } from "@/features/auth/components/Navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/components/card";
 import { Button } from "@/shared/ui/components/button";
 import { ArrowLeft, TrendingUp, Target, Calendar } from "lucide-react";
@@ -79,10 +77,7 @@ export default async function ProjectStatsPage({
   };
 
   return (
-    <div className="min-h-screen bg-background pb-20">
-      <Header />
-      
-      <main className="container mx-auto px-4 py-8 max-w-4xl">
+    <main className="container mx-auto px-4 py-8 max-w-4xl">
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">
           <Link href={`/study/${projectId}`}>
@@ -237,9 +232,6 @@ export default async function ProjectStatsPage({
             </div>
           </CardContent>
         </Card>
-      </main>
-
-      <Navigation />
-    </div>
+    </main>
   );
 }

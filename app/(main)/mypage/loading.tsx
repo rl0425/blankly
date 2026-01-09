@@ -1,13 +1,8 @@
-import { Header } from "@/features/auth/components/Header";
-import { Navigation } from "@/features/auth/components/Navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/components/card";
 
 export default function MyPageLoading() {
   return (
-    <div className="min-h-screen bg-background pb-20">
-      <Header />
-      
-      <main className="container mx-auto px-4 py-8">
+    <main className="container mx-auto px-4 py-8">
         {/* Title Skeleton */}
         <div className="h-8 w-32 bg-muted rounded animate-pulse mb-8" />
 
@@ -51,9 +46,6 @@ export default function MyPageLoading() {
             </Card>
           ))}
         </div>
-      </main>
-
-      <Navigation />
-    </div>
+    </main>
   );
 }

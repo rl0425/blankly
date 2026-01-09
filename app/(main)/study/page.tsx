@@ -1,7 +1,5 @@
 import { createClient } from "@/shared/lib/supabase/server";
 import { getProjects } from "@/features/study/actions/projects";
-import { Header } from "@/features/auth/components/Header";
-import { Navigation } from "@/features/auth/components/Navigation";
 import { CreateProjectModal } from "@/features/study/components/CreateProjectModal";
 import { ProjectList } from "@/features/study/components/ProjectList";
 
@@ -13,10 +11,7 @@ export default async function StudyPage() {
   const projects = user ? await getProjects() : [];
 
   return (
-    <div className="min-h-screen bg-background pb-20">
-      <Header />
-      
-      <main className="container mx-auto px-4 py-8">
+    <main className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-2xl font-bold toss-heading-sm">학습 프로젝트</h1>
@@ -28,10 +23,7 @@ export default async function StudyPage() {
         </div>
 
         <ProjectList projects={projects} />
-      </main>
-
-      <Navigation />
-    </div>
+    </main>
   );
 }
 

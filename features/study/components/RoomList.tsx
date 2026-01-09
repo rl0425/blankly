@@ -17,6 +17,14 @@ interface RoomListProps {
     difficulty: string;
     status: string;
     is_user_completed: boolean;
+    session?: {
+      is_completed: boolean;
+      correct_count: number;
+      wrong_count: number;
+      total_problems: number;
+      completed_at?: string;
+    } | null;
+    [key: string]: unknown;
   }>;
   projectId: string;
 }

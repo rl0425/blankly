@@ -1,14 +1,9 @@
-import { Header } from "@/features/auth/components/Header";
-import { Navigation } from "@/features/auth/components/Navigation";
 import { Card, CardContent, CardHeader } from "@/shared/ui/components/card";
 import { Progress } from "@/shared/ui/components/progress";
 
 export default function ProblemLoading() {
   return (
-    <div className="min-h-screen bg-background pb-20">
-      <Header />
-
-      <main className="container mx-auto px-4 py-8 max-w-2xl">
+    <main className="container mx-auto px-4 py-8 max-w-2xl">
         {/* Back Button Skeleton */}
         <div className="h-6 w-32 bg-muted rounded animate-pulse mb-4" />
 
@@ -39,9 +34,6 @@ export default function ProblemLoading() {
           <div className="h-10 flex-1 bg-muted rounded animate-pulse" />
           <div className="h-10 flex-1 bg-muted rounded animate-pulse" />
         </div>
-      </main>
-
-      <Navigation />
-    </div>
+    </main>
   );
 }

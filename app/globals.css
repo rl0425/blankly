@@ -72,9 +72,27 @@
     @apply border-border;
   }
   
+  html {
+    @apply overflow-x-hidden;
+    /* 스크롤바 너비를 고려하여 레이아웃 시프트 방지 */
+    scrollbar-gutter: stable;
+  }
+  
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground overflow-x-hidden;
     font-feature-settings: "rlig" 1, "calt" 1;
+    /* 레이아웃 시프트 방지 */
+    min-height: 100vh;
+    min-height: 100dvh; /* 동적 뷰포트 높이 */
+    /* 스크롤바로 인한 레이아웃 시프트 방지 (macOS에서는 스크롤바가 오버레이로 표시됨) */
+    position: relative;
+  }
+  
+  /* 스크롤바가 있는 경우를 위한 안전장치 */
+  @supports (scrollbar-gutter: stable) {
+    html {
+      scrollbar-gutter: stable;
+    }
   }
   
   /* Toss Style Typography */

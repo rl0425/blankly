@@ -1,8 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/shared/lib/supabase/server";
 import { getUserProfile, getUserStats } from "@/features/auth/actions/auth";
-import { Header } from "@/features/auth/components/Header";
-import { Navigation } from "@/features/auth/components/Navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/components/card";
 import { Button } from "@/shared/ui/components/button";
 import { ArrowLeft } from "lucide-react";
@@ -20,10 +18,7 @@ export default async function StatsPage() {
   const stats = await getUserStats(); // 삭제되지 않은 항목만 카운트
 
   return (
-    <div className="min-h-screen bg-background pb-20">
-      <Header />
-      
-      <main className="container mx-auto px-4 py-8">
+    <main className="container mx-auto px-4 py-8">
         <div className="flex items-center gap-4 mb-8">
           <Link href="/mypage">
             <Button variant="ghost" size="icon">
@@ -66,10 +61,7 @@ export default async function StatsPage() {
             </CardContent>
           </Card>
         </div>
-      </main>
-
-      <Navigation />
-    </div>
+    </main>
   );
 }
 

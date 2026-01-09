@@ -1,13 +1,8 @@
-import { Header } from "@/features/auth/components/Header";
-import { Navigation } from "@/features/auth/components/Navigation";
 import { Card, CardContent, CardHeader } from "@/shared/ui/components/card";
 
 export default function StudyLoading() {
   return (
-    <div className="min-h-screen bg-background pb-20">
-      <Header />
-
-      <main className="container mx-auto px-4 py-8">
+    <main className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-6">
           <div className="h-8 w-48 bg-muted rounded animate-pulse" />
           <div className="h-10 w-32 bg-muted rounded animate-pulse" />
@@ -32,9 +27,6 @@ export default function StudyLoading() {
             </Card>
           ))}
         </div>
-      </main>
-
-      <Navigation />
-    </div>
+    </main>
   );
 }

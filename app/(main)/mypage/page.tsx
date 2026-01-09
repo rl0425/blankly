@@ -2,10 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/shared/lib/supabase/server";
 import { getUserProfile, getUserStats } from "@/features/auth/actions/auth";
-import { Header } from "@/features/auth/components/Header";
-import { Navigation } from "@/features/auth/components/Navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/components/card";
-import { Button } from "@/shared/ui/components/button";
 import { ChevronRight, TrendingUp, XCircle } from "lucide-react";
 
 export default async function MyPage() {
@@ -24,10 +21,7 @@ export default async function MyPage() {
     : 0;
 
   return (
-    <div className="min-h-screen bg-background pb-20">
-      <Header />
-      
-      <main className="container mx-auto px-4 py-8">
+    <main className="container mx-auto px-4 py-8">
         <h1 className="text-2xl font-bold toss-heading-sm mb-8">마이페이지</h1>
 
         {/* Profile Card */}
@@ -103,10 +97,7 @@ export default async function MyPage() {
             </Card>
           </Link>
         </div>
-      </main>
-
-      <Navigation />
-    </div>
+    </main>
   );
 }
 

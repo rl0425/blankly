@@ -14,7 +14,9 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
     if (!user) {
       return NextResponse.json(
@@ -37,13 +39,13 @@ export async function POST(request: NextRequest) {
       // 2. 기존 답안을 정답으로 업데이트
       const { error: updateError } = await supabase
         .from("user_answers")
-        .update({ 
+        .update({
           is_correct: true,
           ai_feedback: {
             ...existingAnswer.ai_feedback,
             manually_corrected: true,
             corrected_at: new Date().toISOString(),
-          }
+          },
         })
         .eq("id", existingAnswer.id);
 
@@ -70,7 +72,10 @@ export async function POST(request: NextRequest) {
         .single();
 
       const isRoomDeleted = room?.deleted_at !== null;
-      const isProjectDeleted = room?.projects && (room.projects as { deleted_at: string | null }).deleted_at !== null;
+      const isProjectDeleted =
+        room?.projects &&
+        (room.projects as unknown as { deleted_at: string | null })
+          .deleted_at !== null;
       const shouldUpdateStats = !isRoomDeleted && !isProjectDeleted;
 
       // 5. 프로필 통계 업데이트 (삭제되지 않은 방/프로젝트인 경우만)
@@ -103,7 +108,7 @@ export async function POST(request: NextRequest) {
           ai_feedback: {
             manually_corrected: true,
             corrected_at: new Date().toISOString(),
-          }
+          },
         })
         .select()
         .single();
@@ -124,7 +129,10 @@ export async function POST(request: NextRequest) {
         .single();
 
       const isRoomDeleted = room?.deleted_at !== null;
-      const isProjectDeleted = room?.projects && (room.projects as { deleted_at: string | null }).deleted_at !== null;
+      const isProjectDeleted =
+        room?.projects &&
+        (room.projects as unknown as { deleted_at: string | null })
+          .deleted_at !== null;
       const shouldUpdateStats = !isRoomDeleted && !isProjectDeleted;
 
       // 프로필 통계 업데이트 (삭제되지 않은 방/프로젝트인 경우만)
@@ -151,9 +159,11 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Mark correct error:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "서버 오류가 발생했습니다" },
+      {
+        error:
+          error instanceof Error ? error.message : "서버 오류가 발생했습니다",
+      },
       { status: 500 }
     );
   }
 }
-

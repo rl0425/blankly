@@ -1,23 +1,25 @@
-import { Header } from "@/features/auth/components/Header";
-import { Navigation } from "@/features/auth/components/Navigation";
 import { Card, CardContent } from "@/shared/ui/components/card";
 
 export default function ProjectDetailLoading() {
   return (
-    <div className="min-h-screen bg-background pb-20">
-      <Header />
-
-      <main className="container mx-auto px-4 py-8">
-        {/* Header Skeleton */}
-        <div className="flex items-center gap-4 mb-6">
-          <div className="h-10 w-10 bg-muted rounded animate-pulse" />
-          <div className="flex-1">
-            <div className="h-7 w-48 bg-muted rounded animate-pulse mb-2" />
-            <div className="h-4 w-64 bg-muted rounded animate-pulse" />
+    <>
+      {/* Fixed Header Skeleton */}
+      <div className="fixed top-16 left-0 right-0 z-40 bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60 border-b">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center gap-4">
+            <div className="h-10 w-10 bg-muted rounded animate-pulse" />
+            <div className="flex-1">
+              <div className="h-7 w-48 bg-muted rounded animate-pulse mb-2" />
+              <div className="h-4 w-64 bg-muted rounded animate-pulse" />
+            </div>
           </div>
         </div>
+      </div>
 
-        {/* Stats Cards Skeleton */}
+      {/* Fixed 헤더 높이만큼 padding-top 추가 */}
+      <div className="pt-[120px]">
+        <main className="container mx-auto px-4 py-8">
+          {/* Stats Cards Skeleton */}
         <div className="grid gap-4 md:grid-cols-3 mb-6">
           {[1, 2, 3].map((i) => (
             <Card key={i} className="animate-pulse">
@@ -55,9 +57,8 @@ export default function ProjectDetailLoading() {
             </Card>
           ))}
         </div>
-      </main>
-
-      <Navigation />
-    </div>
+        </main>
+      </div>
+    </>
   );
 }

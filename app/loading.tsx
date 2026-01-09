@@ -1,5 +1,3 @@
-import { Header } from "@/features/auth/components/Header";
-import { Navigation } from "@/features/auth/components/Navigation";
 import {
   Card,
   CardContent,
@@ -9,10 +7,7 @@ import {
 
 export default function HomeLoading() {
   return (
-    <div className="min-h-screen bg-background pb-20">
-      <Header />
-
-      <main className="container mx-auto px-4 py-8">
+    <main className="container mx-auto px-4 py-8">
         {/* Header Skeleton */}
         <div className="mb-8">
           <div className="h-9 w-64 bg-muted rounded animate-pulse mb-2" />
@@ -54,9 +49,6 @@ export default function HomeLoading() {
             ))}
           </div>
         </div>
-      </main>
-
-      <Navigation />
-    </div>
+    </main>
   );
 }
