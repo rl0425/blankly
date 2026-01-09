@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/shared/lib/supabase/server";
 import { getUserProfile, getUserStats } from "@/features/auth/actions/auth";
 import { getProjects } from "@/features/study/actions/projects";
@@ -96,24 +97,23 @@ export default async function HomePage() {
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
               {projects.slice(0, 4).map((project) => (
-                <Card
-                  key={project.id}
-                  className="hover:shadow-lg transition-shadow cursor-pointer"
-                >
-                  <CardHeader>
-                    <CardTitle>{project.title}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">
-                        {project.category}
-                      </span>
-                      <span className="text-primary font-medium">
-                        {project.completed_rooms}/{project.total_rooms} Day
-                      </span>
-                    </div>
-                  </CardContent>
-                </Card>
+                <Link key={project.id} href={`/study/${project.id}`}>
+                  <Card className="hover:shadow-lg transition-shadow cursor-pointer">
+                    <CardHeader>
+                      <CardTitle>{project.title}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">
+                          {project.category}
+                        </span>
+                        <span className="text-primary font-medium">
+                          {project.completed_rooms}/{project.total_rooms} Day
+                        </span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </Link>
               ))}
             </div>
           )}

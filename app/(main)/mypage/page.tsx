@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/shared/lib/supabase/server";
-import { getUserProfile } from "@/features/auth/actions/auth";
+import { getUserProfile, getUserStats } from "@/features/auth/actions/auth";
 import { Header } from "@/features/auth/components/Header";
 import { Navigation } from "@/features/auth/components/Navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/components/card";
@@ -17,9 +17,10 @@ export default async function MyPage() {
   }
 
   const profile = await getUserProfile();
+  const stats = await getUserStats(); // 삭제되지 않은 항목만 카운트
 
-  const accuracy = profile && profile.total_solved > 0
-    ? Math.round((profile.total_correct / profile.total_solved) * 100)
+  const accuracy = stats.total_solved > 0
+    ? Math.round((stats.total_correct / stats.total_solved) * 100)
     : 0;
 
   return (
@@ -47,11 +48,11 @@ export default async function MyPage() {
           <CardContent>
             <div className="grid grid-cols-3 gap-4 text-center">
               <div>
-                <div className="text-2xl font-bold">{profile?.total_solved || 0}</div>
+                <div className="text-2xl font-bold">{stats.total_solved}</div>
                 <p className="text-xs text-muted-foreground">총 문제</p>
               </div>
               <div>
-                <div className="text-2xl font-bold">{profile?.total_correct || 0}</div>
+                <div className="text-2xl font-bold">{stats.total_correct}</div>
                 <p className="text-xs text-muted-foreground">정답</p>
               </div>
               <div>

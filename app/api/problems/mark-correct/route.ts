@@ -62,20 +62,33 @@ export async function POST(request: NextRequest) {
         .eq("user_id", user.id)
         .eq("problem_id", problemId);
 
-      // 4. 프로필 통계 업데이트 (정답 수 +1)
-      const { data: profile } = await supabase
-        .from("user_profiles")
-        .select("total_correct")
-        .eq("user_id", user.id)
+      // 4. 방과 프로젝트 삭제 여부 확인
+      const { data: room } = await supabase
+        .from("rooms")
+        .select("deleted_at, project_id, projects!inner(deleted_at)")
+        .eq("id", roomId)
         .single();
 
-      if (profile) {
-        await supabase
+      const isRoomDeleted = room?.deleted_at !== null;
+      const isProjectDeleted = room?.projects && (room.projects as { deleted_at: string | null }).deleted_at !== null;
+      const shouldUpdateStats = !isRoomDeleted && !isProjectDeleted;
+
+      // 5. 프로필 통계 업데이트 (삭제되지 않은 방/프로젝트인 경우만)
+      if (shouldUpdateStats) {
+        const { data: profile } = await supabase
           .from("user_profiles")
-          .update({
-            total_correct: profile.total_correct + 1,
-          })
-          .eq("user_id", user.id);
+          .select("total_correct")
+          .eq("user_id", user.id)
+          .single();
+
+        if (profile) {
+          await supabase
+            .from("user_profiles")
+            .update({
+              total_correct: profile.total_correct + 1,
+            })
+            .eq("user_id", user.id);
+        }
       }
     } else {
       // 답안이 없으면 새로 생성 (정답으로)
@@ -103,21 +116,34 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // 프로필 통계 업데이트
-      const { data: profile } = await supabase
-        .from("user_profiles")
-        .select("total_solved, total_correct")
-        .eq("user_id", user.id)
+      // 방과 프로젝트 삭제 여부 확인
+      const { data: room } = await supabase
+        .from("rooms")
+        .select("deleted_at, project_id, projects!inner(deleted_at)")
+        .eq("id", roomId)
         .single();
 
-      if (profile) {
-        await supabase
+      const isRoomDeleted = room?.deleted_at !== null;
+      const isProjectDeleted = room?.projects && (room.projects as { deleted_at: string | null }).deleted_at !== null;
+      const shouldUpdateStats = !isRoomDeleted && !isProjectDeleted;
+
+      // 프로필 통계 업데이트 (삭제되지 않은 방/프로젝트인 경우만)
+      if (shouldUpdateStats) {
+        const { data: profile } = await supabase
           .from("user_profiles")
-          .update({
-            total_solved: profile.total_solved + 1,
-            total_correct: profile.total_correct + 1,
-          })
-          .eq("user_id", user.id);
+          .select("total_solved, total_correct")
+          .eq("user_id", user.id)
+          .single();
+
+        if (profile) {
+          await supabase
+            .from("user_profiles")
+            .update({
+              total_solved: profile.total_solved + 1,
+              total_correct: profile.total_correct + 1,
+            })
+            .eq("user_id", user.id);
+        }
       }
     }
 

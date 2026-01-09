@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/shared/lib/supabase/server";
-import { getUserProfile } from "@/features/auth/actions/auth";
+import { getUserProfile, getUserStats } from "@/features/auth/actions/auth";
 import { Header } from "@/features/auth/components/Header";
 import { Navigation } from "@/features/auth/components/Navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/components/card";
@@ -17,6 +17,7 @@ export default async function StatsPage() {
   }
 
   const profile = await getUserProfile();
+  const stats = await getUserStats(); // 삭제되지 않은 항목만 카운트
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -40,16 +41,16 @@ export default async function StatsPage() {
             <CardContent className="space-y-4">
               <div className="flex justify-between">
                 <span>총 문제 수</span>
-                <span className="font-bold">{profile?.total_solved || 0}개</span>
+                <span className="font-bold">{stats.total_solved}개</span>
               </div>
               <div className="flex justify-between">
                 <span>정답 수</span>
-                <span className="font-bold text-primary">{profile?.total_correct || 0}개</span>
+                <span className="font-bold text-primary">{stats.total_correct}개</span>
               </div>
               <div className="flex justify-between">
                 <span>오답 수</span>
                 <span className="font-bold text-destructive">
-                  {(profile?.total_solved || 0) - (profile?.total_correct || 0)}개
+                  {stats.total_solved - stats.total_correct}개
                 </span>
               </div>
               <div className="flex justify-between">
