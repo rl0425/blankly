@@ -2,9 +2,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/components
 
 export default function MyPageLoading() {
   return (
-    <main className="container mx-auto px-4 py-8">
-        {/* Title Skeleton */}
-        <div className="h-8 w-32 bg-muted rounded animate-pulse mb-8" />
+    <>
+      {/* Fixed Header Skeleton */}
+      <div className="fixed top-16 left-0 right-0 z-40 bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60 border-b">
+        <div className="container mx-auto px-4 py-4">
+          <div className="h-8 w-32 bg-muted rounded animate-pulse" />
+        </div>
+      </div>
+
+      {/* Fixed 헤더 높이만큼 padding-top 추가 */}
+      <div className="pt-[120px]">
+        <main className="container mx-auto px-4 py-8">
 
         {/* Profile Card Skeleton */}
         <Card className="mb-6 animate-pulse">
@@ -46,6 +54,8 @@ export default function MyPageLoading() {
             </Card>
           ))}
         </div>
-    </main>
+        </main>
+      </div>
+    </>
   );
 }
