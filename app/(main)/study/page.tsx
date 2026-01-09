@@ -1,12 +1,9 @@
-import { redirect } from "next/navigation";
-import Link from "next/link";
 import { createClient } from "@/shared/lib/supabase/server";
 import { getProjects } from "@/features/study/actions/projects";
 import { Header } from "@/features/auth/components/Header";
 import { Navigation } from "@/features/auth/components/Navigation";
 import { CreateProjectModal } from "@/features/study/components/CreateProjectModal";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/shared/ui/components/card";
-import { Plus } from "lucide-react";
+import { ProjectList } from "@/features/study/components/ProjectList";
 
 export default async function StudyPage() {
   const supabase = await createClient();
@@ -30,56 +27,7 @@ export default async function StudyPage() {
           <CreateProjectModal />
         </div>
 
-        {projects.length === 0 ? (
-          <Card>
-            <CardContent className="py-12 text-center">
-              <div className="mb-4">
-                <div className="mx-auto h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
-                  <Plus className="h-8 w-8 text-primary" />
-                </div>
-              </div>
-              <h3 className="text-lg font-semibold mb-2">첫 프로젝트를 만들어보세요</h3>
-              <p className="text-muted-foreground mb-4">
-                PDF나 텍스트를 업로드하면 AI가 자동으로 문제를 만들어드려요
-              </p>
-              <CreateProjectModal />
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {projects.map((project) => (
-              <Link key={project.id} href={`/study/${project.id}`}>
-                <Card className="hover:shadow-lg transition-all cursor-pointer h-full">
-                  <CardHeader>
-                    <div className="flex items-start justify-between">
-                      <CardTitle className="line-clamp-2">{project.title}</CardTitle>
-                      <span className="text-xs px-2 py-1 rounded-full bg-primary/10 text-primary">
-                        {project.category}
-                      </span>
-                    </div>
-                    {project.description && (
-                      <CardDescription className="line-clamp-2">
-                        {project.description}
-                      </CardDescription>
-                    )}
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">
-                        진행률: {project.total_rooms > 0 
-                          ? Math.round((project.completed_rooms / project.total_rooms) * 100)
-                          : 0}%
-                      </span>
-                      <span className="text-primary font-medium">
-                        {project.completed_rooms}/{project.total_rooms} Day
-                      </span>
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
-          </div>
-        )}
+        <ProjectList projects={projects} />
       </main>
 
       <Navigation />

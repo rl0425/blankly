@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   Dialog,
@@ -16,8 +16,15 @@ import { Label } from "@/shared/ui/components/label";
 import { useToast } from "@/shared/hooks/use-toast";
 import { createClient } from "@/shared/lib/supabase/client";
 import { Plus } from "lucide-react";
+import type { Project } from "@/shared/types";
 
-export function CreateProjectModal() {
+interface CreateProjectModalProps {
+  editMode?: boolean;
+  initialData?: Project;
+  onClose?: () => void;
+}
+
+export function CreateProjectModal({ editMode = false, initialData, onClose }: CreateProjectModalProps = {}) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -27,6 +34,20 @@ export function CreateProjectModal() {
     basePrompt: "",
     role: "",
   });
+
+  // 편집 모드일 때 초기 데이터 설정
+  useEffect(() => {
+    if (editMode && initialData) {
+      setOpen(true);
+      setFormData({
+        title: initialData.title || "",
+        category: initialData.category || "영어",
+        description: initialData.description || "",
+        basePrompt: (initialData.source_data as any)?.basePrompt || "",
+        role: (initialData.source_data as any)?.role || "",
+      });
+    }
+  }, [editMode, initialData]);
   
   const router = useRouter();
   const { toast } = useToast();
@@ -40,7 +61,7 @@ export function CreateProjectModal() {
     if (!user) {
       toast({
         title: "로그인이 필요합니다",
-        description: "프로젝트를 생성하려면 로그인해주세요.",
+        description: editMode ? "프로젝트를 수정하려면 로그인해주세요." : "프로젝트를 생성하려면 로그인해주세요.",
         variant: "destructive",
       });
       router.push("/login?redirectTo=/study");
@@ -60,19 +81,35 @@ export function CreateProjectModal() {
         role: formData.role,
       }));
 
-      const response = await fetch("/api/projects/create", {
-        method: "POST",
-        body: requestData,
-      });
+      if (editMode && initialData) {
+        // 수정 모드
+        const { updateProject } = await import("@/features/study/actions/projects");
+        const result = await updateProject(initialData.id, requestData);
+        
+        if (result.error) {
+          throw new Error(result.error);
+        }
 
-      if (!response.ok) {
-        throw new Error("프로젝트 생성 실패");
+        toast({
+          title: "프로젝트 수정 완료! ✨",
+          description: "프로젝트가 성공적으로 수정되었습니다.",
+        });
+      } else {
+        // 생성 모드
+        const response = await fetch("/api/projects/create", {
+          method: "POST",
+          body: requestData,
+        });
+
+        if (!response.ok) {
+          throw new Error("프로젝트 생성 실패");
+        }
+
+        toast({
+          title: "프로젝트 생성 완료! 🎉",
+          description: "이제 방을 만들어 학습을 시작하세요.",
+        });
       }
-
-      toast({
-        title: "프로젝트 생성 완료! 🎉",
-        description: "이제 방을 만들어 학습을 시작하세요.",
-      });
 
       setOpen(false);
       setFormData({
@@ -82,11 +119,17 @@ export function CreateProjectModal() {
         basePrompt: "",
         role: "",
       });
-      router.refresh();
+      
+      if (onClose) {
+        onClose();
+      }
+      
+      // 페이지 새로고침
+      window.location.reload();
     } catch (error) {
       toast({
         title: "오류 발생",
-        description: "프로젝트 생성 중 문제가 발생했습니다.",
+        description: error instanceof Error ? error.message : (editMode ? "프로젝트 수정 중 문제가 발생했습니다." : "프로젝트 생성 중 문제가 발생했습니다."),
         variant: "destructive",
       });
     } finally {
@@ -94,17 +137,26 @@ export function CreateProjectModal() {
     }
   };
 
+  const handleClose = () => {
+    setOpen(false);
+    if (onClose) {
+      onClose();
+    }
+  };
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm">
-          <Plus className="h-4 w-4 mr-2" />
-          새 프로젝트
-        </Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={handleClose}>
+      {!editMode && (
+        <DialogTrigger asChild>
+          <Button size="sm">
+            <Plus className="h-4 w-4 mr-2" />
+            새 프로젝트
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>새 프로젝트 만들기</DialogTitle>
+          <DialogTitle>{editMode ? "프로젝트 수정" : "새 프로젝트 만들기"}</DialogTitle>
           <DialogDescription>
             프로젝트의 기본 설정을 입력하세요. 이 설정은 모든 방에서 사용됩니다.
           </DialogDescription>
@@ -176,12 +228,12 @@ export function CreateProjectModal() {
             <Button
               type="button"
               variant="outline"
-              onClick={() => setOpen(false)}
+              onClick={handleClose}
             >
               취소
             </Button>
             <Button type="submit" disabled={loading || !formData.title || !formData.role || !formData.basePrompt}>
-              {loading ? "생성 중..." : "프로젝트 생성"}
+              {loading ? (editMode ? "수정 중..." : "생성 중...") : (editMode ? "프로젝트 수정" : "프로젝트 생성")}
             </Button>
           </div>
         </form>

@@ -79,16 +79,15 @@ export async function login(formData: FormData) {
     if (error) {
       return { error: error.message };
     }
+    
+    // 성공 시 success 반환 (redirect는 클라이언트에서 처리)
+    return { success: true };
   } catch (error) {
     if (error instanceof z.ZodError) {
       return { error: error.issues[0].message };
     }
     return { error: "로그인 중 오류가 발생했습니다" };
   }
-
-  // redirect는 try-catch 밖에서 호출
-  revalidatePath("/", "layout");
-  redirect("/");
 }
 
 export async function logout() {

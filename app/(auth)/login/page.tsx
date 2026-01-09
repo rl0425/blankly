@@ -30,6 +30,15 @@ export default function LoginPage() {
           description: result.error,
           variant: "destructive",
         });
+        setLoading(false);
+      } else if (result?.success) {
+        // 로그인 성공 시 홈으로 이동
+        toast({
+          title: "로그인 성공! 🎉",
+          description: "환영합니다!",
+        });
+        router.push("/");
+        router.refresh();
       }
     } catch (error) {
       toast({
@@ -37,7 +46,6 @@ export default function LoginPage() {
         description: "로그인 중 문제가 발생했습니다.",
         variant: "destructive",
       });
-    } finally {
       setLoading(false);
     }
   };

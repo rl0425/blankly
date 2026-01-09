@@ -101,6 +101,54 @@ export async function getProject(projectId: string) {
   return data;
 }
 
+export async function updateProject(projectId: string, formData: FormData) {
+  try {
+    const rawData = {
+      title: formData.get("title") as string,
+      description: formData.get("description") as string,
+      category: formData.get("category") as ProjectCategory,
+      source_type: formData.get("source_type") as SourceType,
+      source_data: JSON.parse((formData.get("source_data") as string) || "{}"),
+    };
+
+    const validatedData = CreateProjectSchema.parse(rawData);
+
+    const supabase = await createClient();
+    
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      return { error: "로그인이 필요합니다" };
+    }
+
+    const { data, error } = await supabase
+      .from("projects")
+      .update({
+        ...validatedData,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", projectId)
+      .eq("user_id", user.id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Project update error:", error);
+      return { error: "프로젝트 수정에 실패했습니다" };
+    }
+
+    revalidatePath("/study");
+    revalidatePath(`/study/${projectId}`);
+    return { data };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return { error: error.issues[0].message };
+    }
+    console.error("Update project error:", error);
+    return { error: "프로젝트 수정 중 오류가 발생했습니다" };
+  }
+}
+
 export async function deleteProject(projectId: string) {
   const supabase = await createClient();
 
