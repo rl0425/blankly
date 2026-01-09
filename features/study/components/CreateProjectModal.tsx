@@ -24,7 +24,11 @@ interface CreateProjectModalProps {
   onClose?: () => void;
 }
 
-export function CreateProjectModal({ editMode = false, initialData, onClose }: CreateProjectModalProps = {}) {
+export function CreateProjectModal({
+  editMode = false,
+  initialData,
+  onClose,
+}: CreateProjectModalProps = {}) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -43,25 +47,33 @@ export function CreateProjectModal({ editMode = false, initialData, onClose }: C
         title: initialData.title || "",
         category: initialData.category || "영어",
         description: initialData.description || "",
-        basePrompt: (initialData.source_data as any)?.basePrompt || "",
-        role: (initialData.source_data as any)?.role || "",
+        basePrompt:
+          (initialData.source_data as { basePrompt?: string; role?: string })
+            ?.basePrompt || "",
+        role:
+          (initialData.source_data as { basePrompt?: string; role?: string })
+            ?.role || "",
       });
     }
   }, [editMode, initialData]);
-  
+
   const router = useRouter();
   const { toast } = useToast();
   const supabase = createClient();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // 로그인 체크
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) {
       toast({
         title: "로그인이 필요합니다",
-        description: editMode ? "프로젝트를 수정하려면 로그인해주세요." : "프로젝트를 생성하려면 로그인해주세요.",
+        description: editMode
+          ? "프로젝트를 수정하려면 로그인해주세요."
+          : "프로젝트를 생성하려면 로그인해주세요.",
         variant: "destructive",
       });
       router.push("/login?redirectTo=/study");
@@ -76,16 +88,21 @@ export function CreateProjectModal({ editMode = false, initialData, onClose }: C
       requestData.append("category", formData.category);
       requestData.append("description", formData.description);
       requestData.append("source_type", "prompt");
-      requestData.append("source_data", JSON.stringify({
-        basePrompt: formData.basePrompt,
-        role: formData.role,
-      }));
+      requestData.append(
+        "source_data",
+        JSON.stringify({
+          basePrompt: formData.basePrompt,
+          role: formData.role,
+        })
+      );
 
       if (editMode && initialData) {
         // 수정 모드
-        const { updateProject } = await import("@/features/study/actions/projects");
+        const { updateProject } = await import(
+          "@/features/study/actions/projects"
+        );
         const result = await updateProject(initialData.id, requestData);
-        
+
         if (result.error) {
           throw new Error(result.error);
         }
@@ -119,17 +136,22 @@ export function CreateProjectModal({ editMode = false, initialData, onClose }: C
         basePrompt: "",
         role: "",
       });
-      
+
       if (onClose) {
         onClose();
       }
-      
+
       // 페이지 새로고침
       window.location.reload();
     } catch (error) {
       toast({
         title: "오류 발생",
-        description: error instanceof Error ? error.message : (editMode ? "프로젝트 수정 중 문제가 발생했습니다." : "프로젝트 생성 중 문제가 발생했습니다."),
+        description:
+          error instanceof Error
+            ? error.message
+            : editMode
+            ? "프로젝트 수정 중 문제가 발생했습니다."
+            : "프로젝트 생성 중 문제가 발생했습니다.",
         variant: "destructive",
       });
     } finally {
@@ -137,48 +159,56 @@ export function CreateProjectModal({ editMode = false, initialData, onClose }: C
     }
   };
 
-  const handleClose = () => {
-    setOpen(false);
-    if (onClose) {
+  const handleOpenChange = (isOpen: boolean) => {
+    setOpen(isOpen);
+    if (!isOpen && onClose) {
       onClose();
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       {!editMode && (
         <DialogTrigger asChild>
-          <Button size="sm">
-            <Plus className="h-4 w-4 mr-2" />
-            새 프로젝트
+          <Button size="sm" onClick={() => setOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" />새 프로젝트
           </Button>
         </DialogTrigger>
       )}
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{editMode ? "프로젝트 수정" : "새 프로젝트 만들기"}</DialogTitle>
+          <DialogTitle>
+            {editMode ? "프로젝트 수정" : "새 프로젝트 만들기"}
+          </DialogTitle>
           <DialogDescription>
             프로젝트의 기본 설정을 입력하세요. 이 설정은 모든 방에서 사용됩니다.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 mt-4 max-h-[60vh] overflow-y-auto">
+        <form
+          onSubmit={handleSubmit}
+          className="space-y-4 mt-4 max-h-[60vh] overflow-y-auto"
+        >
           <div className="space-y-2">
             <Label htmlFor="title">프로젝트 제목 *</Label>
             <Input
               id="title"
               value={formData.title}
-              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, title: e.target.value })
+              }
               placeholder="예: 토익 RC 정복하기"
               required
             />
           </div>
-          
+
           <div className="space-y-2">
             <Label htmlFor="category">카테고리 *</Label>
             <select
               id="category"
               value={formData.category}
-              onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, category: e.target.value })
+              }
               className="flex h-11 w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm"
             >
               <option value="영어">영어</option>
@@ -193,7 +223,9 @@ export function CreateProjectModal({ editMode = false, initialData, onClose }: C
             <Input
               id="description"
               value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, description: e.target.value })
+              }
               placeholder="예: 토익 시험 대비 문법 학습"
             />
           </div>
@@ -203,12 +235,16 @@ export function CreateProjectModal({ editMode = false, initialData, onClose }: C
             <textarea
               id="role"
               value={formData.role}
-              onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, role: e.target.value })
+              }
               placeholder="예: 당신은 토익 시험 전문가입니다."
               className="flex min-h-[80px] w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm"
               required
             />
-            <p className="text-xs text-muted-foreground">AI가 어떤 역할로 문제를 만들지 설정합니다</p>
+            <p className="text-xs text-muted-foreground">
+              AI가 어떤 역할로 문제를 만들지 설정합니다
+            </p>
           </div>
 
           <div className="space-y-2">
@@ -216,24 +252,42 @@ export function CreateProjectModal({ editMode = false, initialData, onClose }: C
             <textarea
               id="basePrompt"
               value={formData.basePrompt}
-              onChange={(e) => setFormData({ ...formData, basePrompt: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, basePrompt: e.target.value })
+              }
               placeholder="예: 토익 RC Part 5 문법 문제를 출제해주세요. 실전과 유사한 난이도로 만들어주세요."
               className="flex min-h-[100px] w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm"
               required
             />
-            <p className="text-xs text-muted-foreground">모든 방에서 기본으로 사용될 프롬프트입니다</p>
+            <p className="text-xs text-muted-foreground">
+              모든 방에서 기본으로 사용될 프롬프트입니다
+            </p>
           </div>
 
           <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
             <Button
               type="button"
               variant="outline"
-              onClick={handleClose}
+              onClick={() => handleOpenChange(false)}
             >
               취소
             </Button>
-            <Button type="submit" disabled={loading || !formData.title || !formData.role || !formData.basePrompt}>
-              {loading ? (editMode ? "수정 중..." : "생성 중...") : (editMode ? "프로젝트 수정" : "프로젝트 생성")}
+            <Button
+              type="submit"
+              disabled={
+                loading ||
+                !formData.title ||
+                !formData.role ||
+                !formData.basePrompt
+              }
+            >
+              {loading
+                ? editMode
+                  ? "수정 중..."
+                  : "생성 중..."
+                : editMode
+                ? "프로젝트 수정"
+                : "프로젝트 생성"}
             </Button>
           </div>
         </form>
@@ -241,4 +295,3 @@ export function CreateProjectModal({ editMode = false, initialData, onClose }: C
     </Dialog>
   );
 }
-
