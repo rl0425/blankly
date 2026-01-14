@@ -40,7 +40,7 @@ export default async function HomePage() {
     <main className="container mx-auto px-4 py-8">
       <div className="mb-6">
         <h1 className="text-3xl font-bold toss-heading mb-2">
-          {user ? `안녕하세요, ${profile?.nickname}님! 👋` : "안녕하세요! 👋"}
+          {user ? `안녕하세요, ${profile?.nickname}님!` : "안녕하세요!"}
         </h1>
         <p className="text-muted-foreground toss-body">
           {user

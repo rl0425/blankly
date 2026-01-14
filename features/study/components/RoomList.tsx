@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { RoomCard } from "./RoomCard";
 import { Button } from "@/shared/ui/components/button";
 import { Card, CardContent } from "@/shared/ui/components/card";
-import { Trash2, CheckSquare, Square } from "lucide-react";
+import { Trash2, CheckSquare, Square, BookOpen } from "lucide-react";
 import { deleteRoom } from "@/features/study/actions/rooms";
 import { useToast } from "@/shared/hooks/use-toast";
 
@@ -179,7 +179,7 @@ export function RoomList({ rooms, projectId }: RoomListProps) {
     return (
       <Card>
         <CardContent className="py-12 text-center">
-          <div className="text-6xl mb-4">📚</div>
+          <BookOpen className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
           <p className="text-lg font-medium text-foreground mb-2">
             아직 학습 방이 없어요
           </p>

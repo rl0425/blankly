@@ -12,6 +12,10 @@ import {
   ChevronRight,
   ArrowLeft,
   CheckCircle,
+  XCircle,
+  Trophy,
+  Inbox,
+  Sparkles,
 } from "lucide-react";
 import type { Problem, Room, AIGradeResponse } from "@/shared/types";
 import Link from "next/link";
@@ -138,14 +142,6 @@ export default function RoomProblemPage({
         ...results,
         [currentProblem.id]: { isCorrect: correct, feedback },
       });
-
-      toast({
-        title: correct ? "정답입니다! 🎉" : "틀렸습니다 😢",
-        description:
-          feedback?.feedback ||
-          (correct ? "다음 문제로 넘어가세요" : "다시 확인해보세요"),
-        variant: correct ? "default" : "destructive",
-      });
     } catch (error) {
       console.error("답안 제출 오류:", error);
       toast({
@@ -187,7 +183,7 @@ export default function RoomProblemPage({
       await completeRoomSession(resolvedParams.roomId);
 
       toast({
-        title: "학습을 완료했습니다! 🎉",
+        title: "학습을 완료했습니다!",
         description: "수고하셨습니다!",
       });
 
@@ -288,7 +284,7 @@ export default function RoomProblemPage({
       });
 
       toast({
-        title: "정답으로 처리되었습니다 ✅",
+        title: "정답으로 처리되었습니다",
         description: "다음 문제로 넘어가세요",
       });
     } catch (error) {
@@ -329,7 +325,7 @@ export default function RoomProblemPage({
     return (
       <main className="container mx-auto px-4 py-8 max-w-2xl">
         <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-          <div className="text-6xl">📭</div>
+          <Inbox className="h-16 w-16 mx-auto text-muted-foreground" />
           <p className="text-lg font-medium text-muted-foreground">
             {!room ? "방을 찾을 수 없습니다" : "생성된 문제가 없습니다"}
           </p>
@@ -413,17 +409,56 @@ export default function RoomProblemPage({
             />
           </ProblemCard>
 
-          {/* AI Feedback (주관식 오답일 경우) */}
-          {showResult && !isCorrect && (
-            <div className="mt-4 space-y-3">
-              {aiFeedback && (
-                <div className="p-4 rounded-xl bg-muted">
-                  <p className="text-sm font-medium mb-2">AI 피드백</p>
-                  <p className="text-sm text-muted-foreground">
-                    {aiFeedback.improvement_tip || aiFeedback.feedback}
-                  </p>
+          {/* 결과 메시지 (맞았을 때/틀렸을 때) */}
+          {showResult && (
+            <div className="mt-4">
+              {isCorrect ? (
+                <div className="p-4 rounded-xl bg-green-50 dark:bg-green-950/20 border-2 border-green-500/50">
+                  <div className="flex items-center gap-3">
+                    <div className="shrink-0 h-10 w-10 rounded-full bg-green-500 flex items-center justify-center">
+                      <CheckCircle className="h-6 w-6 text-white" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-lg font-bold text-green-700 dark:text-green-400 flex items-center gap-2">
+                        정답입니다!
+                        <Sparkles className="h-5 w-5" />
+                      </p>
+                      <p className="text-sm text-green-600 dark:text-green-500 mt-1">
+                        {aiFeedback?.feedback ||
+                          "훌륭합니다! 다음 문제로 넘어가세요"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 rounded-xl bg-red-50 dark:bg-red-950/20 border-2 border-red-500/50">
+                  <div className="flex items-center gap-3">
+                    <div className="shrink-0 h-10 w-10 rounded-full bg-red-500 flex items-center justify-center">
+                      <XCircle className="h-6 w-6 text-white" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-lg font-bold text-red-700 dark:text-red-400">
+                        틀렸습니다
+                      </p>
+                      <p className="text-sm text-red-600 dark:text-red-500 mt-1">
+                        {aiFeedback?.feedback || "다시 한번 확인해보세요"}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* AI Feedback (주관식 오답일 경우) */}
+          {showResult && !isCorrect && aiFeedback && (
+            <div className="mt-4 space-y-3">
+              <div className="p-4 rounded-xl bg-muted">
+                <p className="text-sm font-medium mb-2">AI 피드백</p>
+                <p className="text-sm text-muted-foreground">
+                  {aiFeedback.improvement_tip || aiFeedback.feedback}
+                </p>
+              </div>
 
               {/* 정답으로 처리하기 버튼 */}
               <Button
@@ -493,7 +528,7 @@ export default function RoomProblemPage({
           <div className="bg-background rounded-2xl max-w-md w-full p-6 space-y-6">
             {/* 헤더 */}
             <div className="text-center space-y-2">
-              <div className="text-6xl mb-4">🎉</div>
+              <Trophy className="h-16 w-16 mx-auto mb-4 text-primary" />
               <h2 className="text-2xl font-bold">학습 완료!</h2>
               <p className="text-muted-foreground">
                 {room?.title}의 모든 문제를 풀었습니다
