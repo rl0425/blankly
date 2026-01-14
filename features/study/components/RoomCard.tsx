@@ -106,21 +106,28 @@ export function RoomCard({
     onToggleSelect?.();
   };
 
-  return (
-    <div className="relative">
-      <Link href={`/study/${projectId}/${room.id}`}>
-        <Card
-          className={`
-            hover:shadow-md transition-all cursor-pointer group
-            ${isDeleting ? "opacity-50 pointer-events-none" : ""}
-            ${isSelected ? "ring-2 ring-primary bg-primary/5" : ""}
-            ${
-              displayStatus === "completed"
-                ? "border-l-4 border-l-green-500 bg-green-50/50 dark:bg-green-950/10"
-                : ""
-            }
-          `}
-        >
+  const handleCardClick = (e: React.MouseEvent) => {
+    if (selectionMode) {
+      e.preventDefault();
+      e.stopPropagation();
+      onToggleSelect?.();
+    }
+  };
+
+  const cardContent = (
+    <Card
+      className={`
+        hover:shadow-md transition-all cursor-pointer group
+        ${isDeleting ? "opacity-50 pointer-events-none" : ""}
+        ${isSelected ? "ring-2 ring-primary bg-primary/5" : ""}
+        ${
+          displayStatus === "completed"
+            ? "border-l-4 border-l-green-500 bg-green-50/50 dark:bg-green-950/10"
+            : ""
+        }
+      `}
+      onClick={selectionMode ? handleCardClick : undefined}
+    >
           <CardContent className="flex items-center justify-between p-4">
             <div className="flex items-center gap-3 flex-1">
               {/* 체크박스 (선택 모드일 때만) - 사각형으로 변경 */}
@@ -225,7 +232,15 @@ export function RoomCard({
             </div>
           </CardContent>
         </Card>
-      </Link>
+  );
+
+  return (
+    <div className="relative">
+      {selectionMode ? (
+        cardContent
+      ) : (
+        <Link href={`/study/${projectId}/${room.id}`}>{cardContent}</Link>
+      )}
 
       {/* 삭제 중 로딩 오버레이 */}
       {isDeleting && (

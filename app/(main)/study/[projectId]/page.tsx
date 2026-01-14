@@ -3,8 +3,7 @@ import Link from "next/link";
 import { createClient } from "@/shared/lib/supabase/server";
 import { getProject } from "@/features/study/actions/projects";
 import { getRoomsByProjectWithSessions } from "@/features/study/actions/rooms";
-import { CreateRoomModal } from "@/features/study/components/CreateRoomModal";
-import { RoomList } from "@/features/study/components/RoomList";
+import { RoomListSection } from "@/features/study/components/RoomListSection";
 import { Card, CardContent } from "@/shared/ui/components/card";
 import { Button } from "@/shared/ui/components/button";
 import {
@@ -118,75 +117,62 @@ export default async function ProjectDetailPage({
       <div className="pt-[120px]">
         <main className="container mx-auto px-4 py-8">
           {/* Rooms List */}
-          <div className="space-y-4 mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold">학습 방</h2>
-              <CreateRoomModal
-                projectId={projectId}
-                projectTitle={project.title}
-              />
-            </div>
-
-            <RoomList
-              rooms={roomsWithCompletion.map((room) => {
-                const roomTyped = room as unknown as {
-                  // 추후 타입 픽스 필요함
-                  id: string;
-                  title: string;
+          <RoomListSection
+            rooms={roomsWithCompletion.map((room) => {
+              const roomTyped = room as unknown as {
+                // 추후 타입 픽스 필요함
+                id: string;
+                title: string;
+                total_problems: number;
+                difficulty: string;
+                status: string;
+                is_user_completed: boolean;
+                session?: {
+                  is_completed: boolean;
+                  correct_count: number;
+                  wrong_count: number;
                   total_problems: number;
-                  difficulty: string;
-                  status: string;
-                  is_user_completed: boolean;
-                  session?: {
-                    is_completed: boolean;
-                    correct_count: number;
-                    wrong_count: number;
-                    total_problems: number;
-                    completed_at?: string;
-                  } | null;
-                };
-                return {
-                  id: roomTyped.id,
-                  title: roomTyped.title,
-                  total_problems: roomTyped.total_problems,
-                  difficulty: roomTyped.difficulty,
-                  status: roomTyped.status,
-                  is_user_completed: roomTyped.is_user_completed,
-                  session: roomTyped.session,
-                };
-              })}
-              projectId={projectId}
-            />
-          </div>
+                  completed_at?: string;
+                } | null;
+              };
+              return {
+                id: roomTyped.id,
+                title: roomTyped.title,
+                total_problems: roomTyped.total_problems,
+                difficulty: roomTyped.difficulty,
+                status: roomTyped.status,
+                is_user_completed: roomTyped.is_user_completed,
+                session: roomTyped.session,
+              };
+            })}
+            projectId={projectId}
+            projectTitle={project.title}
+          />
 
           {/* 통계 영역 */}
           <div className="space-y-4">
-            {/* 마지막 학습 카드 (상단) */}
-            <Card>
-              <CardContent className="py-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Calendar className="h-4 w-4 text-muted-foreground" />
-                    <div>
-                      <p className="text-xs text-muted-foreground">
-                        마지막 학습
-                      </p>
-                      <p className="font-medium text-sm">{lastStudyDate}</p>
-                    </div>
-                  </div>
-                  <Link href={`/study/${projectId}/stats`}>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-2 text-xs h-8"
-                    >
-                      상세 통계 보기
-                      <ArrowRight className="h-3 w-3" />
-                    </Button>
-                  </Link>
-                </div>
-              </CardContent>
-            </Card>
+            {/* 마지막 학습 (텍스트만) */}
+            <div className="flex items-center justify-between py-2">
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">
+                  마지막 학습:{" "}
+                  <span className="font-medium text-foreground">
+                    {lastStudyDate}
+                  </span>
+                </span>
+              </div>
+              <Link href={`/study/${projectId}/stats`}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2 text-xs h-8"
+                >
+                  상세 통계 보기
+                  <ArrowRight className="h-3 w-3" />
+                </Button>
+              </Link>
+            </div>
 
             {/* 통계 카드 (작게) */}
             <div className="grid gap-3 md:grid-cols-3">

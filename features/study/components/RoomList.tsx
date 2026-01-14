@@ -27,11 +27,16 @@ interface RoomListProps {
     [key: string]: unknown;
   }>;
   projectId: string;
+  isEditMode?: boolean;
 }
 
 type FilterType = "all" | "completed" | "incomplete";
 
-export function RoomList({ rooms, projectId }: RoomListProps) {
+export function RoomList({
+  rooms,
+  projectId,
+  isEditMode = false,
+}: RoomListProps) {
   const [selectedRooms, setSelectedRooms] = useState<Set<string>>(new Set());
   const [isDeleting, setIsDeleting] = useState(false);
   const [filter, setFilter] = useState<FilterType>("all");
@@ -226,7 +231,7 @@ export function RoomList({ rooms, projectId }: RoomListProps) {
       </div>
 
       {/* 선택 모드 컨트롤 */}
-      {displayedRooms.length > 0 && (
+      {isEditMode && displayedRooms.length > 0 && (
         <div className="flex items-center justify-between bg-muted/50 p-3 rounded-lg">
           <div className="flex items-center gap-3">
             <Button
@@ -288,7 +293,7 @@ export function RoomList({ rooms, projectId }: RoomListProps) {
               isCompleted={room.is_user_completed}
               isSelected={selectedRooms.has(room.id)}
               onToggleSelect={() => toggleSelect(room.id)}
-              selectionMode={true}
+              selectionMode={isEditMode}
             />
           ))}
 
