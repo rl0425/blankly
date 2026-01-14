@@ -26,9 +26,11 @@ export async function createProject(formData: FormData) {
     const validatedData = CreateProjectSchema.parse(rawData);
 
     const supabase = await createClient();
-    
-    const { data: { user } } = await supabase.auth.getUser();
-    
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
     if (!user) {
       return { error: "로그인이 필요합니다" };
     }
@@ -60,9 +62,11 @@ export async function createProject(formData: FormData) {
 
 export async function getProjects() {
   const supabase = await createClient();
-  
-  const { data: { user } } = await supabase.auth.getUser();
-  
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   if (!user) {
     return [];
   }
@@ -114,9 +118,11 @@ export async function updateProject(projectId: string, formData: FormData) {
     const validatedData = CreateProjectSchema.parse(rawData);
 
     const supabase = await createClient();
-    
-    const { data: { user } } = await supabase.auth.getUser();
-    
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
     if (!user) {
       return { error: "로그인이 필요합니다" };
     }
@@ -156,9 +162,9 @@ export async function deleteProject(projectId: string) {
 
   const { error } = await supabase
     .from("projects")
-    .update({ 
+    .update({
       deleted_at: now,
-      is_active: false 
+      is_active: false,
     })
     .eq("id", projectId);
 
@@ -171,3 +177,77 @@ export async function deleteProject(projectId: string) {
   return { success: true };
 }
 
+// 프로젝트별 통계 가져오기
+export async function getProjectStats(userId: string) {
+  const supabase = await createClient();
+
+  // 모든 프로젝트 가져오기
+  const { data: projects, error: projectsError } = await supabase
+    .from("projects")
+    .select("id, title, category")
+    .eq("user_id", userId)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false });
+
+  if (projectsError) {
+    console.error("Get projects error:", projectsError);
+    return [];
+  }
+
+  if (!projects || projects.length === 0) {
+    return [];
+  }
+
+  // 각 프로젝트별 통계 계산
+  const projectStats = await Promise.all(
+    projects.map(async (project) => {
+      // 해당 프로젝트의 모든 룸 가져오기
+      const { data: rooms } = await supabase
+        .from("rooms")
+        .select("id")
+        .eq("project_id", project.id)
+        .is("deleted_at", null);
+
+      if (!rooms || rooms.length === 0) {
+        return {
+          ...project,
+          total_solved: 0,
+          total_correct: 0,
+          total_wrong: 0,
+          accuracy: 0,
+        };
+      }
+
+      const roomIds = rooms.map((r) => r.id);
+
+      // 해당 프로젝트의 모든 room_sessions 가져오기
+      const { data: sessions } = await supabase
+        .from("room_sessions")
+        .select("total_problems, correct_count, wrong_count, is_completed")
+        .eq("user_id", userId)
+        .in("room_id", roomIds)
+        .eq("is_completed", true);
+
+      // 통계 계산
+      const total_solved =
+        sessions?.reduce((sum, s) => sum + (s.total_problems || 0), 0) || 0;
+      const total_correct =
+        sessions?.reduce((sum, s) => sum + (s.correct_count || 0), 0) || 0;
+      const total_wrong =
+        sessions?.reduce((sum, s) => sum + (s.wrong_count || 0), 0) || 0;
+      const accuracy =
+        total_solved > 0 ? Math.round((total_correct / total_solved) * 100) : 0;
+
+      return {
+        ...project,
+        total_solved,
+        total_correct,
+        total_wrong,
+        accuracy,
+      };
+    })
+  );
+
+  // 통계가 있는 프로젝트만 필터링 (통계가 0인 것도 포함)
+  return projectStats;
+}

@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { createClient } from "@/shared/lib/supabase/server";
 import { getProject } from "@/features/study/actions/projects";
 import { getRoomsByProject } from "@/features/study/actions/rooms";
@@ -9,8 +8,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/shared/ui/components/card";
-import { Button } from "@/shared/ui/components/button";
-import { ArrowLeft, TrendingUp, Target, Calendar } from "lucide-react";
+import { BackButton } from "@/shared/ui/components/back-button";
+import { TrendingUp, Target } from "lucide-react";
 
 export default async function ProjectStatsPage({
   params,
@@ -111,11 +110,7 @@ export default async function ProjectStatsPage({
       <div className="fixed top-16 left-0 right-0 z-40 bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60 border-b">
         <div className="container mx-auto px-4 py-4 max-w-4xl">
           <div className="flex items-center gap-4">
-            <Link href={`/study/${projectId}`}>
-              <Button variant="ghost" size="icon">
-                <ArrowLeft className="h-5 w-5" />
-              </Button>
-            </Link>
+            <BackButton />
             <div>
               <h1 className="text-2xl font-bold toss-heading-sm">상세 통계</h1>
               <p className="text-sm text-muted-foreground mt-1">

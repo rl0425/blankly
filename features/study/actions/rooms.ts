@@ -3,6 +3,18 @@
 import { createClient } from "@/shared/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
+type SessionWithRooms = {
+  rooms?: {
+    id: string;
+    title: string;
+    total_problems: number;
+    difficulty: string;
+    project_id: string;
+    projects?: { title?: string };
+  };
+  start_time: string;
+};
+
 export async function getRoomsByProject(projectId: string) {
   const supabase = await createClient();
 
@@ -196,4 +208,77 @@ export async function deleteRoom(roomId: string) {
   revalidatePath("/study");
 
   return { success: true };
+}
+
+// 최근 사용한 룸 가져오기 (room_sessions 기준)
+export async function getRecentRooms(userId: string, limit: number = 5) {
+  const supabase = await createClient();
+
+  // room_sessions에서 최근에 사용한 룸들을 가져오기
+  const { data: sessions, error } = await supabase
+    .from("room_sessions")
+    .select(
+      `
+      id,
+      room_id,
+      start_time,
+      completed_at,
+      rooms!inner (
+        id,
+        title,
+        total_problems,
+        difficulty,
+        project_id,
+        projects!inner (
+          id,
+          title,
+          deleted_at
+        ),
+        deleted_at
+      )
+    `
+    )
+    .eq("user_id", userId)
+    .is("rooms.deleted_at", null)
+    .is("rooms.projects.deleted_at", null)
+    .order("start_time", { ascending: false })
+    .limit(limit * 2); // 중복 제거를 위해 더 많이 가져오기
+
+  if (error) {
+    console.error("Get recent rooms error:", error);
+    return [];
+  }
+
+  // 중복 제거 (같은 룸이 여러 세션이 있을 수 있음)
+  const uniqueRooms = new Map<
+    string,
+    {
+      id: string;
+      title: string;
+      total_problems: number;
+      difficulty: string;
+      project_id: string;
+      project_title?: string;
+      last_used_at: string;
+    }
+  >();
+
+  sessions?.forEach((session) => {
+    const sessionTyped = session as unknown as SessionWithRooms;
+    const rooms = sessionTyped.rooms;
+
+    if (rooms && !uniqueRooms.has(rooms.id)) {
+      uniqueRooms.set(rooms.id, {
+        id: rooms.id,
+        title: rooms.title,
+        total_problems: rooms.total_problems,
+        difficulty: rooms.difficulty,
+        project_id: rooms.project_id,
+        project_title: rooms.projects?.title,
+        last_used_at: sessionTyped.start_time,
+      });
+    }
+  });
+
+  return Array.from(uniqueRooms.values()).slice(0, limit);
 }
