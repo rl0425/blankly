@@ -5,7 +5,6 @@ import { getProject } from "@/features/study/actions/projects";
 import { getRoomsByProjectWithSessions } from "@/features/study/actions/rooms";
 import { CreateRoomModal } from "@/features/study/components/CreateRoomModal";
 import { RoomList } from "@/features/study/components/RoomList";
-import { Room } from "@/shared/types";
 import { Card, CardContent } from "@/shared/ui/components/card";
 import { Button } from "@/shared/ui/components/button";
 import {
@@ -45,20 +44,31 @@ export default async function ProjectDetailPage({
     user.id
   );
 
-  // 프로젝트 전체 통계 계산
-  const completedRooms = roomsWithCompletion.filter((r) => r.is_user_completed);
-  const totalProblems = completedRooms.reduce(
-    (sum, r) => sum + (r.session?.total_problems || 0),
-    0
+  // 프로젝트 전체 통계 계산 (is_completed=true인 세션만 사용)
+  const roomIds = roomsWithCompletion
+    .map((r) => (r as unknown as { id: string })?.id)
+    .filter((id): id is string => typeof id === "string");
+  const { data: completedSessions } = await supabase
+    .from("room_sessions")
+    .select("room_id, total_problems, correct_count, wrong_count")
+    .eq("user_id", user.id)
+    .in("room_id", roomIds)
+    .eq("is_completed", true);
+
+  // 완료한 방 수 (고유한 room_id 개수)
+  const completedRoomIds = new Set(
+    completedSessions?.map((s) => s.room_id) || []
   );
-  const totalCorrect = completedRooms.reduce(
-    (sum, r) => sum + (r.session?.correct_count || 0),
-    0
-  );
-  const totalWrong = completedRooms.reduce(
-    (sum, r) => sum + (r.session?.wrong_count || 0),
-    0
-  );
+  const completedRoomsCount = completedRoomIds.size;
+
+  // 통계 계산
+  const totalProblems =
+    completedSessions?.reduce((sum, s) => sum + (s.total_problems || 0), 0) ||
+    0;
+  const totalCorrect =
+    completedSessions?.reduce((sum, s) => sum + (s.correct_count || 0), 0) || 0;
+  const totalWrong =
+    completedSessions?.reduce((sum, s) => sum + (s.wrong_count || 0), 0) || 0;
   const accuracyRate =
     totalProblems > 0 ? Math.round((totalCorrect / totalProblems) * 100) : 0;
 
@@ -107,95 +117,8 @@ export default async function ProjectDetailPage({
       {/* Fixed 헤더 높이만큼 padding-top 추가 */}
       <div className="pt-[120px]">
         <main className="container mx-auto px-4 py-8">
-          {/* 통계 카드 */}
-          <div className="grid gap-4 md:grid-cols-3 mb-6">
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">
-                      완료한 방
-                    </p>
-                    <p className="text-2xl font-bold">
-                      {completedRooms.length}
-                      <span className="text-lg text-muted-foreground ml-1">
-                        / {project.total_rooms}
-                      </span>
-                    </p>
-                  </div>
-                  <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-                    <CheckCircle className="h-6 w-6 text-primary" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">
-                      평균 정답률
-                    </p>
-                    <p className="text-2xl font-bold">
-                      {accuracyRate}
-                      <span className="text-lg text-muted-foreground ml-1">
-                        %
-                      </span>
-                    </p>
-                  </div>
-                  <div className="h-12 w-12 rounded-full bg-green-500/10 flex items-center justify-center">
-                    <Target className="h-6 w-6 text-green-500" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">
-                      푼 문제
-                    </p>
-                    <p className="text-2xl font-bold">
-                      {totalProblems}
-                      <span className="text-sm text-muted-foreground ml-2">
-                        (맞: {totalCorrect}, 틀: {totalWrong})
-                      </span>
-                    </p>
-                  </div>
-                  <div className="h-12 w-12 rounded-full bg-blue-500/10 flex items-center justify-center">
-                    <TrendingUp className="h-6 w-6 text-blue-500" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* 추가 정보 카드 */}
-          <Card className="mb-6">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Calendar className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm text-muted-foreground">마지막 학습</p>
-                    <p className="font-medium">{lastStudyDate}</p>
-                  </div>
-                </div>
-                <Link href={`/study/${projectId}/stats`}>
-                  <Button variant="outline" size="sm" className="gap-2">
-                    상세 통계 보기
-                    <ArrowRight className="h-4 w-4" />
-                  </Button>
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
-
           {/* Rooms List */}
-          <div className="space-y-4">
+          <div className="space-y-4 mb-8">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold">학습 방</h2>
               <CreateRoomModal
@@ -205,41 +128,131 @@ export default async function ProjectDetailPage({
             </div>
 
             <RoomList
-              rooms={roomsWithCompletion.map((room) => ({
-                id: (
-                  room as unknown as Room & {
-                    is_user_completed: boolean;
-                    session?: {
-                      is_completed: boolean;
-                      correct_count: number;
-                      wrong_count: number;
-                      total_problems: number;
-                      completed_at?: string;
-                    } | null;
-                  }
-                ).id,
-                title: (
-                  room as unknown as Room & { is_user_completed: boolean }
-                ).title,
-                total_problems: (room as unknown as Room).total_problems,
-                difficulty: (room as unknown as Room).difficulty,
-                status: (room as unknown as Room).status,
-                is_user_completed: (room as { is_user_completed: boolean })
-                  .is_user_completed,
-                session: (
-                  room as {
-                    session?: {
-                      is_completed: boolean;
-                      correct_count: number;
-                      wrong_count: number;
-                      total_problems: number;
-                      completed_at?: string;
-                    } | null;
-                  }
-                ).session,
-              }))}
+              rooms={roomsWithCompletion.map((room) => {
+                const roomTyped = room as unknown as {
+                  // 추후 타입 픽스 필요함
+                  id: string;
+                  title: string;
+                  total_problems: number;
+                  difficulty: string;
+                  status: string;
+                  is_user_completed: boolean;
+                  session?: {
+                    is_completed: boolean;
+                    correct_count: number;
+                    wrong_count: number;
+                    total_problems: number;
+                    completed_at?: string;
+                  } | null;
+                };
+                return {
+                  id: roomTyped.id,
+                  title: roomTyped.title,
+                  total_problems: roomTyped.total_problems,
+                  difficulty: roomTyped.difficulty,
+                  status: roomTyped.status,
+                  is_user_completed: roomTyped.is_user_completed,
+                  session: roomTyped.session,
+                };
+              })}
               projectId={projectId}
             />
+          </div>
+
+          {/* 통계 영역 */}
+          <div className="space-y-4">
+            {/* 마지막 학습 카드 (상단) */}
+            <Card>
+              <CardContent className="py-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        마지막 학습
+                      </p>
+                      <p className="font-medium text-sm">{lastStudyDate}</p>
+                    </div>
+                  </div>
+                  <Link href={`/study/${projectId}/stats`}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-2 text-xs h-8"
+                    >
+                      상세 통계 보기
+                      <ArrowRight className="h-3 w-3" />
+                    </Button>
+                  </Link>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* 통계 카드 (작게) */}
+            <div className="grid gap-3 md:grid-cols-3">
+              <Card>
+                <CardContent className="py-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">
+                        완료한 방
+                      </p>
+                      <p className="text-xl font-bold">
+                        {completedRoomsCount}
+                        <span className="text-sm text-muted-foreground ml-1">
+                          / {project.total_rooms}
+                        </span>
+                      </p>
+                    </div>
+                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                      <CheckCircle className="h-5 w-5 text-primary" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="py-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">
+                        평균 정답률
+                      </p>
+                      <p className="text-xl font-bold">
+                        {accuracyRate}
+                        <span className="text-sm text-muted-foreground ml-1">
+                          %
+                        </span>
+                      </p>
+                    </div>
+                    <div className="h-10 w-10 rounded-full bg-green-500/10 flex items-center justify-center">
+                      <Target className="h-5 w-5 text-green-500" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="py-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">
+                        푼 문제
+                      </p>
+                      <p className="text-xl font-bold">
+                        {totalProblems}
+                        <span className="text-xs text-muted-foreground ml-2">
+                          (맞: {totalCorrect}, 틀: {totalWrong})
+                        </span>
+                      </p>
+                    </div>
+                    <div className="h-10 w-10 rounded-full bg-blue-500/10 flex items-center justify-center">
+                      <TrendingUp className="h-5 w-5 text-blue-500" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </div>
         </main>
       </div>

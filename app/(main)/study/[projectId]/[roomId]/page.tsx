@@ -180,22 +180,11 @@ export default function RoomProblemPage({
     setSubmitting(true);
 
     try {
-      // 통계 계산
-      const correctCount = Object.values(results).filter(
-        (r) => r.isCorrect
-      ).length;
-      const wrongCount = Object.keys(results).length - correctCount;
-
-      // 세션 완료 처리
+      // 세션 완료 처리 (서버에서 실제 데이터베이스를 조회하여 통계 계산)
       const { completeRoomSession } = await import(
         "@/features/problem/actions/problems"
       );
-      await completeRoomSession(resolvedParams.roomId, {
-        totalProblems: problems.length,
-        solvedCount: Object.keys(answers).length,
-        correctCount,
-        wrongCount,
-      });
+      await completeRoomSession(resolvedParams.roomId);
 
       toast({
         title: "학습을 완료했습니다! 🎉",

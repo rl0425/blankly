@@ -258,15 +258,7 @@ export async function submitAnswer(
   };
 }
 
-export async function completeRoomSession(
-  roomId: string,
-  stats: {
-    totalProblems: number;
-    solvedCount: number;
-    correctCount: number;
-    wrongCount: number;
-  }
-) {
+export async function completeRoomSession(roomId: string) {
   const supabase = await createClient();
   
   const { data: { user } } = await supabase.auth.getUser();
@@ -275,14 +267,56 @@ export async function completeRoomSession(
     return { error: "로그인이 필요합니다" };
   }
 
-  // 세션 정보 저장
+  // 1. 해당 방의 전체 문제 수 가져오기
+  const { data: problems, error: problemsError } = await supabase
+    .from("problems")
+    .select("id")
+    .eq("room_id", roomId);
+
+  if (problemsError) {
+    console.error("Get problems error:", problemsError);
+    return { error: "문제 정보를 가져올 수 없습니다" };
+  }
+
+  const totalProblems = problems?.length || 0;
+
+  // 2. 실제 데이터베이스에서 사용자의 답안 조회 (각 문제당 최신 답안만)
+  const { data: userAnswers, error: answersError } = await supabase
+    .from("user_answers")
+    .select("problem_id, is_correct, created_at")
+    .eq("user_id", user.id)
+    .eq("room_id", roomId)
+    .order("created_at", { ascending: false });
+
+  if (answersError) {
+    console.error("Get user answers error:", answersError);
+    return { error: "답안 정보를 가져올 수 없습니다" };
+  }
+
+  // 3. 각 문제별로 가장 최근 답안만 사용 (문제 ID별로 그룹화)
+  const latestAnswers = new Map<string, boolean>();
+  if (userAnswers) {
+    // created_at으로 내림차순 정렬된 답안에서 문제 ID별로 첫 번째(최신) 답안만 사용
+    userAnswers.forEach((answer) => {
+      if (!latestAnswers.has(answer.problem_id)) {
+        latestAnswers.set(answer.problem_id, answer.is_correct);
+      }
+    });
+  }
+
+  // 4. 통계 계산
+  const solvedCount = latestAnswers.size;
+  const correctCount = Array.from(latestAnswers.values()).filter((isCorrect) => isCorrect).length;
+  const wrongCount = solvedCount - correctCount;
+
+  // 5. 세션 정보 저장
   const { error } = await supabase.from("room_sessions").insert({
     user_id: user.id,
     room_id: roomId,
-    total_problems: stats.totalProblems,
-    solved_count: stats.solvedCount,
-    correct_count: stats.correctCount,
-    wrong_count: stats.wrongCount,
+    total_problems: totalProblems,
+    solved_count: solvedCount,
+    correct_count: correctCount,
+    wrong_count: wrongCount,
     is_completed: true,
     completed_at: new Date().toISOString(),
   });
@@ -292,7 +326,7 @@ export async function completeRoomSession(
     return { error: "세션 완료 처리에 실패했습니다" };
   }
 
-  // 룸 상태 업데이트
+  // 6. 룸 상태 업데이트
   await supabase
     .from("rooms")
     .update({ status: "completed" })

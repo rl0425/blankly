@@ -81,7 +81,7 @@ export async function getRoomsByProjectWithSessions(
     .eq("project_id", projectId)
     .is("deleted_at", null)
     .eq("room_sessions.user_id", userId)
-    .order("day_number", { ascending: true });
+    .order("created_at", { ascending: false });
 
   if (error) {
     console.error("Get rooms with sessions error:", error);

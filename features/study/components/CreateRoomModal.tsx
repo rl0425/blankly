@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/shared/ui/components/button";
 import { Label } from "@/shared/ui/components/label";
 import { useToast } from "@/shared/hooks/use-toast";
 import { X, ChevronDown, ChevronUp, Upload } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 
 interface CreateRoomModalProps {
   projectId: string;
@@ -51,10 +52,34 @@ export function CreateRoomModal({
   const router = useRouter();
   const { toast } = useToast();
 
+  // 바텀시트 열릴 때 body scroll lock
+  useEffect(() => {
+    if (isOpen) {
+      const scrollY = window.scrollY;
+      document.body.style.position = "fixed";
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.width = "100%";
+      document.documentElement.style.overflow = "hidden";
+    } else {
+      const scrollY = document.body.style.top;
+      document.body.style.position = "";
+      document.body.style.top = "";
+      document.body.style.width = "";
+      document.documentElement.style.overflow = "";
+      if (scrollY) {
+        window.scrollTo(0, parseInt(scrollY || "0") * -1);
+      }
+    }
+    return () => {
+      document.body.style.position = "";
+      document.body.style.top = "";
+      document.body.style.width = "";
+      document.documentElement.style.overflow = "";
+    };
+  }, [isOpen]);
+
   // 이전 설정 불러오기
   const handleLoadPreviousSettings = async () => {
-    if (!usePreviousSettings) return;
-
     setIsLoadingSettings(true);
     try {
       const { getLastRoomSettings } = await import("@/features/study/actions/rooms");
@@ -82,6 +107,7 @@ export function CreateRoomModal({
         setUsePreviousSettings(false);
       }
     } catch (error) {
+      console.error("Load previous settings error:", error);
       toast({
         title: "설정 불러오기 실패",
         description: "다시 시도해주세요",
@@ -198,29 +224,49 @@ export function CreateRoomModal({
         + 새 방 만들기
       </Button>
 
-      {isOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-background rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto relative">
-            {/* Header */}
-            <div className="sticky top-0 bg-background border-b px-6 py-4 flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-bold">새 방 만들기</h2>
-                <p className="text-sm text-muted-foreground mt-1">
-                  {projectTitle}
-                </p>
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-[60] p-0 md:p-4"
+            onClick={(e) => {
+              if (e.target === e.currentTarget && !isLoading) {
+                setIsOpen(false);
+              }
+            }}
+          >
+            <motion.div
+              initial={{ y: "100%", opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: "100%", opacity: 0 }}
+              transition={{ type: "spring", damping: 30, stiffness: 300 }}
+              className="bg-background rounded-t-2xl md:rounded-2xl max-w-2xl w-full max-h-[calc(100vh-4rem)] md:max-h-[90vh] flex flex-col relative md:initial md:translate-y-0 md:animate-none"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="sticky top-0 bg-background border-b px-6 py-4 flex items-center justify-between flex-shrink-0 z-10">
+                <div>
+                  <h2 className="text-xl font-bold">새 방 만들기</h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {projectTitle}
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setIsOpen(false)}
+                  disabled={isLoading}
+                >
+                  <X className="h-5 w-5" />
+                </Button>
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setIsOpen(false)}
-                disabled={isLoading}
-              >
-                <X className="h-5 w-5" />
-              </Button>
-            </div>
 
-            {/* Content */}
-            <form onSubmit={handleSubmit} className="p-6 space-y-6">
+              {/* Content - 스크롤 가능 영역 */}
+              <div className="flex-1 overflow-y-auto">
+                <form id="room-form" onSubmit={handleSubmit} className="p-6 space-y-6">
               {/* 이전 설정 불러오기 체크박스 */}
               <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50">
                 <input
@@ -587,8 +633,11 @@ export function CreateRoomModal({
                 )}
               </div>
 
-              {/* 버튼 */}
-              <div className="flex gap-3 pt-4">
+                </form>
+              </div>
+
+              {/* 버튼 - 하단 고정 */}
+              <div className="sticky bottom-0 bg-background border-t px-6 py-4 flex gap-3 flex-shrink-0 z-10 md:relative md:border-t-0 md:px-6 md:py-4">
                 <Button
                   type="button"
                   variant="outline"
@@ -598,36 +647,41 @@ export function CreateRoomModal({
                 >
                   취소
                 </Button>
-                <Button type="submit" disabled={isLoading} className="flex-1">
+                <Button
+                  type="submit"
+                  disabled={isLoading}
+                  className="flex-1"
+                  form="room-form"
+                >
                   {isLoading
                     ? "문제 생성 중..."
                     : `문제 ${problemCount}개 생성하기`}
                 </Button>
               </div>
-            </form>
 
-            {/* 로딩 오버레이 */}
-            {isLoading && (
-              <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-[100]">
-                <div className="flex flex-col items-center gap-4 p-8 bg-card rounded-xl shadow-lg">
-                  <div className="relative w-16 h-16">
-                    <div className="absolute inset-0 border-4 border-primary/20 rounded-full"></div>
-                    <div className="absolute inset-0 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-                  </div>
-                  <div className="text-center space-y-2">
-                    <p className="text-lg font-semibold">
-                      AI가 문제를 생성하고 있습니다...
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {problemCount}개의 문제를 만들고 있어요 (약 10~30초 소요)
-                    </p>
+              {/* 로딩 오버레이 */}
+              {isLoading && (
+                <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-[100] rounded-t-2xl md:rounded-2xl">
+                  <div className="flex flex-col items-center gap-4 p-8 bg-card rounded-xl shadow-lg">
+                    <div className="relative w-16 h-16">
+                      <div className="absolute inset-0 border-4 border-primary/20 rounded-full"></div>
+                      <div className="absolute inset-0 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                    <div className="text-center space-y-2">
+                      <p className="text-lg font-semibold">
+                        AI가 문제를 생성하고 있습니다...
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {problemCount}개의 문제를 만들고 있어요 (약 10~30초 소요)
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 }
