@@ -244,7 +244,9 @@ export function CreateProjectModal({
                 className="p-6 space-y-4"
               >
                 <div className="space-y-2">
-                  <Label htmlFor="title">프로젝트 제목 *</Label>
+                  <Label htmlFor="title">
+                    프로젝트 제목 <span className="text-red-500">*</span>
+                  </Label>
                   <Input
                     id="title"
                     value={formData.title}
@@ -258,7 +260,9 @@ export function CreateProjectModal({
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="category">카테고리 *</Label>
+                  <Label htmlFor="category">
+                    카테고리 <span className="text-red-500">*</span>
+                  </Label>
                   <select
                     id="category"
                     value={formData.category}
@@ -289,7 +293,9 @@ export function CreateProjectModal({
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="role">AI 역할 설정 *</Label>
+                  <Label htmlFor="role">
+                    AI 역할 설정 <span className="text-red-500">*</span>
+                  </Label>
                   <textarea
                     id="role"
                     value={formData.role}
@@ -307,7 +313,9 @@ export function CreateProjectModal({
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="basePrompt">기본 프롬프트 *</Label>
+                  <Label htmlFor="basePrompt">
+                    기본 프롬프트 <span className="text-red-500">*</span>
+                  </Label>
                   <textarea
                     id="basePrompt"
                     value={formData.basePrompt}

@@ -41,6 +41,7 @@ export function CreateRoomModal({
   // 에러 상태
   const [titleError, setTitleError] = useState("");
   const [sourceDataError, setSourceDataError] = useState("");
+  const [aiPromptError, setAiPromptError] = useState("");
 
   // 기본 설정
   const [title, setTitle] = useState("");
@@ -204,10 +205,10 @@ export function CreateRoomModal({
       }
 
       // 텍스트가 너무 짧으면 경고
-      if (text.trim().length < 100) {
+      if (text.trim().length < 10) {
         toast({
           title: "파일 내용이 부족합니다",
-          description: "최소 100자 이상의 내용이 필요합니다",
+          description: "최소 10자 이상의 내용이 필요합니다",
           variant: "destructive",
         });
       } else {
@@ -241,6 +242,7 @@ export function CreateRoomModal({
     // 에러 초기화
     setTitleError("");
     setSourceDataError("");
+    setAiPromptError("");
 
     // 유효성 검사
     let hasError = false;
@@ -257,16 +259,16 @@ export function CreateRoomModal({
       (generationMode === "user_data" || generationMode === "hybrid") &&
       !sourceData.trim()
     ) {
-      setSourceDataError("최소 100자 이상의 학습 내용을 입력해주세요");
+      setSourceDataError("최소 10자 이상의 학습 내용을 입력해주세요");
       if (!hasError) {
         document
           .getElementById("sourceData")
           ?.scrollIntoView({ behavior: "smooth", block: "center" });
       }
       hasError = true;
-    } else if (sourceData.trim().length < 100 && generationMode !== "ai_only") {
+    } else if (sourceData.trim().length < 10 && generationMode !== "ai_only") {
       setSourceDataError(
-        `최소 100자 이상 입력해주세요 (현재 ${sourceData.trim().length}자)`
+        `최소 10자 이상 입력해주세요 (현재 ${sourceData.trim().length}자)`
       );
       if (!hasError) {
         document
@@ -276,11 +278,30 @@ export function CreateRoomModal({
       hasError = true;
     }
 
+    // AI 전체 생성 모드에서는 프롬프트가 필수
+    if (generationMode === "ai_only" && !aiPrompt.trim()) {
+      setAiPromptError("AI 프롬프트를 입력해주세요");
+      if (!hasError) {
+        document
+          .getElementById("aiPrompt")
+          ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+      hasError = true;
+    } else if (generationMode === "ai_only" && aiPrompt.trim().length < 10) {
+      setAiPromptError(
+        `최소 10자 이상 입력해주세요 (현재 ${aiPrompt.trim().length}자)`
+      );
+      if (!hasError) {
+        document
+          .getElementById("aiPrompt")
+          ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+      hasError = true;
+    }
+
     if (hasError) {
       return;
     }
-
-    // AI 전체 생성 모드에서는 프롬프트가 선택적 (프로젝트 기본 프롬프트 사용 가능)
 
     setIsLoading(true);
 
@@ -304,7 +325,22 @@ export function CreateRoomModal({
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || "방 생성 실패");
+        const errorMessage = error.error || "방 생성 실패";
+
+        // 제목 중복 에러인 경우 제목 필드에 에러 표시
+        if (
+          errorMessage.includes("같은 제목") ||
+          errorMessage.includes("제목")
+        ) {
+          setTitleError(errorMessage);
+          setIsLoading(false);
+          document
+            .getElementById("title")
+            ?.scrollIntoView({ behavior: "smooth", block: "center" });
+          return;
+        }
+
+        throw new Error(errorMessage);
       }
 
       toast({
@@ -327,6 +363,7 @@ export function CreateRoomModal({
       setShowAdvanced(false);
       setTitleError("");
       setSourceDataError("");
+      setAiPromptError("");
     } catch (error) {
       console.error("Room creation error:", error);
       toast({
@@ -419,7 +456,7 @@ export function CreateRoomModal({
                   {/* 방 제목 */}
                   <div className="space-y-2">
                     <Label htmlFor="title">
-                      방 제목 <span className="text-destructive">*</span>
+                      방 제목 <span className="text-red-500">*</span>
                     </Label>
                     <input
                       id="title"
@@ -436,7 +473,7 @@ export function CreateRoomModal({
                       disabled={isLoading || isLoadingSettings}
                     />
                     {titleError && (
-                      <p className="text-sm text-destructive">{titleError}</p>
+                      <p className="text-sm text-red-500">{titleError}</p>
                     )}
                   </div>
 
@@ -444,7 +481,7 @@ export function CreateRoomModal({
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="problemCount">
-                        문제 수 <span className="text-destructive">*</span>
+                        문제 수 <span className="text-red-500">*</span>
                       </Label>
                       <select
                         id="problemCount"
@@ -465,7 +502,7 @@ export function CreateRoomModal({
 
                     <div className="space-y-2">
                       <Label htmlFor="difficulty">
-                        난이도 <span className="text-destructive">*</span>
+                        난이도 <span className="text-red-500">*</span>
                       </Label>
                       <select
                         id="difficulty"
@@ -624,7 +661,7 @@ export function CreateRoomModal({
                   <div className="space-y-3">
                     <Label className="flex items-center gap-2">
                       <BookOpen className="h-4 w-4" />
-                      학습 자료 선택 <span className="text-destructive">*</span>
+                      학습 자료 선택 <span className="text-red-500">*</span>
                     </Label>
                     <div className="space-y-2">
                       <label
@@ -742,7 +779,7 @@ export function CreateRoomModal({
                     generationMode === "hybrid") && (
                     <div className="space-y-2">
                       <Label htmlFor="sourceData">
-                        학습 내용 <span className="text-destructive">*</span>
+                        학습 내용 <span className="text-red-500">*</span>
                       </Label>
                       <textarea
                         id="sourceData"
@@ -751,7 +788,7 @@ export function CreateRoomModal({
                           setSourceData(e.target.value);
                           if (sourceDataError) setSourceDataError("");
                         }}
-                        placeholder="학습할 내용을 입력하세요... (최소 100자)&#10;&#10;예시:&#10;React는 사용자 인터페이스를 구축하기 위한 JavaScript 라이브러리입니다.&#10;컴포넌트 기반 아키텍처를 사용하며, 가상 DOM을 통해 효율적인 렌더링을 제공합니다.&#10;..."
+                        placeholder="학습할 내용을 입력하세요... (최소 10자)&#10;&#10;예시:&#10;React는 사용자 인터페이스를 구축하기 위한 JavaScript 라이브러리입니다.&#10;컴포넌트 기반 아키텍처를 사용하며, 가상 DOM을 통해 효율적인 렌더링을 제공합니다.&#10;..."
                         className={`flex w-full rounded-xl border ${
                           sourceDataError
                             ? "border-destructive"
@@ -760,12 +797,12 @@ export function CreateRoomModal({
                         disabled={isLoading || isLoadingSettings}
                       />
                       {sourceDataError && (
-                        <p className="text-sm text-destructive">
+                        <p className="text-sm text-red-500">
                           {sourceDataError}
                         </p>
                       )}
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
-                        <span>{sourceData.length}자 / 최소 100자</span>
+                        <span>{sourceData.length}자 / 최소 10자</span>
                         <div className="relative">
                           <input
                             type="file"
@@ -801,18 +838,28 @@ export function CreateRoomModal({
                   {/* AI 프롬프트 (ai_only 모드) */}
                   {generationMode === "ai_only" && (
                     <div className="space-y-2">
-                      <Label htmlFor="aiPrompt">AI 프롬프트 (선택)</Label>
+                      <Label htmlFor="aiPrompt">
+                        AI 프롬프트 <span className="text-red-500">*</span>
+                      </Label>
                       <textarea
                         id="aiPrompt"
                         value={aiPrompt}
-                        onChange={(e) => setAiPrompt(e.target.value)}
-                        placeholder="추가 지시사항을 입력하세요... (비워두면 프로젝트 기본 프롬프트 사용)&#10;&#10;예시:&#10;- 토익 RC Part 5 문법 문제&#10;- 비즈니스 영어 위주&#10;- 동사 시제 관련 문제 많이"
-                        className="flex w-full rounded-xl border border-input bg-background px-4 py-3 text-sm min-h-[120px] resize-y"
+                        onChange={(e) => {
+                          setAiPrompt(e.target.value);
+                          if (aiPromptError) setAiPromptError("");
+                        }}
+                        placeholder="AI 프롬프트를 입력하세요... (최소 10자)&#10;&#10;예시:&#10;- 토익 RC Part 5 문법 문제&#10;- 비즈니스 영어 위주&#10;- 동사 시제 관련 문제 많이"
+                        className={`flex w-full rounded-xl border ${
+                          aiPromptError ? "border-red-500" : "border-input"
+                        } bg-background px-4 py-3 text-sm min-h-[120px] resize-y`}
                         disabled={isLoading || isLoadingSettings}
                       />
+                      {aiPromptError && (
+                        <p className="text-sm text-red-500">{aiPromptError}</p>
+                      )}
                       <p className="text-xs text-muted-foreground flex items-center gap-1">
                         <Lightbulb className="h-3 w-3" />
-                        프로젝트의 기본 프롬프트가 자동으로 사용됩니다
+                        AI가 문제를 생성할 때 사용할 프롬프트를 입력하세요
                       </p>
                     </div>
                   )}

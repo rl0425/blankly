@@ -86,15 +86,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 2. Day 번호 계산
+    // 2. 같은 프로젝트 내 제목 중복 체크
+    const { data: existingRoom } = await supabase
+      .from("rooms")
+      .select("id")
+      .eq("project_id", projectId)
+      .eq("title", title.trim())
+      .is("deleted_at", null)
+      .maybeSingle();
+
+    if (existingRoom) {
+      return NextResponse.json(
+        { error: "같은 프로젝트 내에 이미 같은 제목의 방이 있습니다" },
+        { status: 400 }
+      );
+    }
+
+    // 3. Day 번호 계산
     const { count } = await supabase
       .from("rooms")
       .select("*", { count: "exact", head: true })
-      .eq("project_id", projectId);
+      .eq("project_id", projectId)
+      .is("deleted_at", null);
 
     const dayNumber = (count || 0) + 1;
 
-    // 3. 생성 모드별 프롬프트 생성
+    // 4. 생성 모드별 프롬프트 생성
     const systemPrompt = buildSystemPrompt(generationMode, gradingStrictness);
     const userPrompt = buildUserPrompt({
       generationMode,
@@ -107,7 +124,7 @@ export async function POST(request: NextRequest) {
       project,
     });
 
-    // 4. AI로 문제 생성
+    // 5. AI로 문제 생성
     const completion = await groq.chat.completions.create({
       messages: [
         {

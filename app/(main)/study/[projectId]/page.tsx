@@ -43,8 +43,40 @@ export default async function ProjectDetailPage({
     user.id
   );
 
+  // 정렬: 완료된 방을 위로 (최신순), 그 다음 미완료된 방 (최신순)
+  const sortedRooms = [...roomsWithCompletion].sort((a, b) => {
+    const aCompleted = a.is_user_completed;
+    const bCompleted = b.is_user_completed;
+
+    // 완료된 방이 우선
+    if (aCompleted && !bCompleted) return -1;
+    if (!aCompleted && bCompleted) return 1;
+
+    // 같은 상태면 최신순 (completed_at 또는 방 생성 시간 기준)
+    // 완료된 방은 completed_at 기준, 미완료된 방은 방 생성 시간 기준
+    type RoomWithDate = {
+      session?: { completed_at?: string } | null;
+      created_at?: string;
+      [key: string]: unknown;
+    };
+    const aRoom = a as RoomWithDate;
+    const bRoom = b as RoomWithDate;
+
+    const aDate = aRoom.session?.completed_at
+      ? new Date(aRoom.session.completed_at).getTime()
+      : aRoom.created_at
+      ? new Date(aRoom.created_at).getTime()
+      : 0;
+    const bDate = bRoom.session?.completed_at
+      ? new Date(bRoom.session.completed_at).getTime()
+      : bRoom.created_at
+      ? new Date(bRoom.created_at).getTime()
+      : 0;
+    return bDate - aDate; // 최신순 (내림차순)
+  });
+
   // 프로젝트 전체 통계 계산 (is_completed=true인 세션만 사용)
-  const roomIds = roomsWithCompletion
+  const roomIds = sortedRooms
     .map((r) => {
       // roomsWithCompletion의 반환 타입에 id가 포함되어 있음
       if (r && typeof r === "object" && "id" in r && typeof r.id === "string") {
@@ -124,7 +156,7 @@ export default async function ProjectDetailPage({
         <main className="container mx-auto px-4 py-8">
           {/* Rooms List */}
           <RoomListSection
-            rooms={roomsWithCompletion.map((room) => {
+            rooms={sortedRooms.map((room) => {
               const roomTyped = room as unknown as {
                 // 추후 타입 픽스 필요함
                 id: string;

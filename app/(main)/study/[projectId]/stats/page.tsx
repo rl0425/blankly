@@ -34,17 +34,19 @@ export default async function ProjectStatsPage({
     redirect("/study");
   }
 
-  // 각 방별 통계 가져오기
+  // 각 방별 통계 가져오기 (완료된 세션만)
   const roomStats = await Promise.all(
     rooms.map(async (room) => {
+      // 완료된 세션만 가져오기
       const { data: session } = await supabase
         .from("room_sessions")
         .select("*")
         .eq("room_id", room.id)
         .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
+        .eq("is_completed", true)
+        .order("completed_at", { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
       return {
         ...room,
@@ -73,11 +75,17 @@ export default async function ProjectStatsPage({
   const overallAccuracy =
     totalProblems > 0 ? Math.round((totalCorrect / totalProblems) * 100) : 0;
 
-  // 난이도별 통계
+  // 난이도별 통계 (완료된 세션만)
   const difficultyStats = {
-    easy: roomStats.filter((r) => r.difficulty === "easy" && r.session),
-    medium: roomStats.filter((r) => r.difficulty === "medium" && r.session),
-    hard: roomStats.filter((r) => r.difficulty === "hard" && r.session),
+    easy: roomStats.filter(
+      (r) => r.difficulty === "easy" && r.session?.is_completed
+    ),
+    medium: roomStats.filter(
+      (r) => r.difficulty === "medium" && r.session?.is_completed
+    ),
+    hard: roomStats.filter(
+      (r) => r.difficulty === "hard" && r.session?.is_completed
+    ),
   };
 
   const difficultyAccuracy = {
