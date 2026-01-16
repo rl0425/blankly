@@ -3,16 +3,46 @@
 import { createClient } from "@/shared/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
-type SessionWithRooms = {
-  rooms?: {
+// Supabase JOIN 결과 타입 정의
+// Supabase의 !inner join은 배열로 반환될 수 있으므로 타입을 유연하게 정의
+type SessionWithRoomsData = {
+  id: string;
+  room_id: string;
+  start_time: string;
+  completed_at?: string | null;
+  rooms: {
     id: string;
     title: string;
     total_problems: number;
     difficulty: string;
     project_id: string;
-    projects?: { title?: string };
-  };
-  start_time: string;
+    projects?: {
+      id: string;
+      title?: string;
+      deleted_at: string | null;
+    } | Array<{
+      id: string;
+      title?: string;
+      deleted_at: string | null;
+    }>;
+    deleted_at: string | null;
+  } | Array<{
+    id: string;
+    title: string;
+    total_problems: number;
+    difficulty: string;
+    project_id: string;
+    projects?: {
+      id: string;
+      title?: string;
+      deleted_at: string | null;
+    } | Array<{
+      id: string;
+      title?: string;
+      deleted_at: string | null;
+    }>;
+    deleted_at: string | null;
+  }>;
 };
 
 export async function getRoomsByProject(projectId: string) {
@@ -201,11 +231,12 @@ export async function deleteRoom(roomId: string) {
 
   console.log("✅ 방 삭제 성공!");
 
-  // 3. 캐시 무효화 (중요!)
+  // 3. 캐시 무효화 (하지만 즉시 router.refresh()를 호출하지 않음)
   if (room?.project_id) {
     revalidatePath(`/study/${room.project_id}`);
   }
   revalidatePath("/study");
+  // router.refresh()를 호출하지 않아서 캐시된 데이터를 먼저 보여주고 백그라운드에서 업데이트
 
   return { success: true };
 }
@@ -264,18 +295,26 @@ export async function getRecentRooms(userId: string, limit: number = 5) {
   >();
 
   sessions?.forEach((session) => {
-    const sessionTyped = session as unknown as SessionWithRooms;
-    const rooms = sessionTyped.rooms;
+    const sessionData = session as SessionWithRoomsData;
+    // rooms는 배열일 수도 있고 단일 객체일 수도 있음
+    const rooms = Array.isArray(sessionData.rooms) 
+      ? sessionData.rooms[0] 
+      : sessionData.rooms;
 
     if (rooms && !uniqueRooms.has(rooms.id)) {
+      // projects도 배열일 수 있음
+      const project = Array.isArray(rooms.projects) 
+        ? rooms.projects[0] 
+        : rooms.projects;
+      
       uniqueRooms.set(rooms.id, {
         id: rooms.id,
         title: rooms.title,
         total_problems: rooms.total_problems,
         difficulty: rooms.difficulty,
         project_id: rooms.project_id,
-        project_title: rooms.projects?.title,
-        last_used_at: sessionTyped.start_time,
+        project_title: project?.title,
+        last_used_at: sessionData.start_time,
       });
     }
   });

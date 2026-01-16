@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/shared/lib/supabase/server";
-import { revalidatePath } from "next/cache";
+import type { RoomWithProject } from "@/shared/types";
 
 export async function getProblemsByRoom(roomId: string) {
   const supabase = await createClient();
@@ -55,7 +55,9 @@ export async function submitAnswer(
   
   // 삭제된 방/프로젝트인지 확인
   const isRoomDeleted = room?.deleted_at !== null;
-  const isProjectDeleted = room?.projects && (room.projects as { deleted_at: string | null }).deleted_at !== null;
+  // projects는 inner join이므로 단일 객체로 반환됨
+  const roomWithProject = room as RoomWithProject | null;
+  const isProjectDeleted = roomWithProject?.projects?.deleted_at !== null;
   const shouldUpdateStats = !isRoomDeleted && !isProjectDeleted;
 
   // 2. 정답 체크
@@ -249,8 +251,6 @@ export async function submitAnswer(
     }
   }
 
-  revalidatePath(`/study/*`);
-
   return { 
     data: answer,
     isCorrect,
@@ -332,7 +332,9 @@ export async function completeRoomSession(roomId: string) {
     .update({ status: "completed" })
     .eq("id", roomId);
 
-  revalidatePath(`/study/*`);
+  // 캐시 무효화는 최소화 (데이터 변경 시에만)
+  // revalidatePath를 호출하지 않아서 캐시된 데이터를 먼저 보여주고 백그라운드에서 업데이트
+  // revalidatePath(`/study/*`);
 
   return { success: true };
 }
@@ -389,7 +391,9 @@ export async function markProblemAsCorrect(
       .single();
 
     const isRoomDeleted = room?.deleted_at !== null;
-    const isProjectDeleted = room?.projects && (room.projects as { deleted_at: string | null }).deleted_at !== null;
+    // projects는 inner join이므로 단일 객체로 반환됨
+    const roomWithProject = room as RoomWithProject | null;
+    const isProjectDeleted = roomWithProject?.projects?.deleted_at !== null;
     const shouldUpdateStats = !isRoomDeleted && !isProjectDeleted;
 
     // 5. 프로필 통계 업데이트 (삭제되지 않은 방/프로젝트인 경우만)
@@ -410,7 +414,9 @@ export async function markProblemAsCorrect(
       }
     }
 
-    revalidatePath(`/study/*`);
+    // 캐시 무효화는 최소화 (데이터 변경 시에만)
+    // revalidatePath를 호출하지 않아서 캐시된 데이터를 먼저 보여주고 백그라운드에서 업데이트
+    // revalidatePath(`/study/*`);
 
     return { success: true };
   } else {

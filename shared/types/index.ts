@@ -143,3 +143,11 @@ export interface AIGradeResponse {
   improvement_tip?: string;
 }
 
+// Supabase JOIN Types
+export interface RoomWithProject {
+  projects: { deleted_at: string | null };
+  deleted_at: string | null;
+  grading_strictness?: string;
+  project_id: string;
+}
+

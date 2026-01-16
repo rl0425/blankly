@@ -45,8 +45,14 @@ export default async function ProjectDetailPage({
 
   // 프로젝트 전체 통계 계산 (is_completed=true인 세션만 사용)
   const roomIds = roomsWithCompletion
-    .map((r) => (r as unknown as { id: string })?.id)
-    .filter((id): id is string => typeof id === "string");
+    .map((r) => {
+      // roomsWithCompletion의 반환 타입에 id가 포함되어 있음
+      if (r && typeof r === "object" && "id" in r && typeof r.id === "string") {
+        return r.id;
+      }
+      return null;
+    })
+    .filter((id): id is string => id !== null);
   const { data: completedSessions } = await supabase
     .from("room_sessions")
     .select("room_id, total_problems, correct_count, wrong_count")

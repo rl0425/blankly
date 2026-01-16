@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/shared/lib/supabase/server";
+import type { RoomWithProject } from "@/shared/types";
 
 export async function POST(request: NextRequest) {
   try {
@@ -72,10 +73,9 @@ export async function POST(request: NextRequest) {
         .single();
 
       const isRoomDeleted = room?.deleted_at !== null;
-      const isProjectDeleted =
-        room?.projects &&
-        (room.projects as unknown as { deleted_at: string | null })
-          .deleted_at !== null;
+      // projects는 inner join이므로 단일 객체로 반환됨
+      const roomWithProject = room as RoomWithProject | null;
+      const isProjectDeleted = roomWithProject?.projects?.deleted_at !== null;
       const shouldUpdateStats = !isRoomDeleted && !isProjectDeleted;
 
       // 5. 프로필 통계 업데이트 (삭제되지 않은 방/프로젝트인 경우만)

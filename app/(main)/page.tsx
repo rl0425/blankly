@@ -53,7 +53,7 @@ export default async function HomePage() {
       {user && recentRooms.length > 0 && (
         <div className="mb-8">
           <h2 className="text-xl font-bold mb-4">최근 사용한 룸</h2>
-          <div className="overflow-x-auto -mx-4 px-4">
+          <div className="overflow-x-auto -mx-4 px-4 thin-scrollbar">
             <div className="flex gap-3 pb-4 min-w-max">
               {recentRooms.map((room) => (
                 <Link
@@ -95,7 +95,7 @@ export default async function HomePage() {
             </CardContent>
           </Card>
         ) : (
-          <div className="overflow-x-auto -mx-4 px-4">
+          <div className="overflow-x-auto -mx-4 px-4 thin-scrollbar">
             <div className="flex gap-3 pb-4 min-w-max">
               {projects.slice(0, 10).map((project) => (
                 <Link

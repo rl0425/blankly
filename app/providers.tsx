@@ -10,7 +10,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 60 * 1000, // 1분
+            staleTime: 5 * 60 * 1000, // 5분 (캐시를 더 오래 유지)
+            gcTime: 10 * 60 * 1000, // 10분 (캐시 보관 시간)
             refetchOnWindowFocus: false,
           },
         },

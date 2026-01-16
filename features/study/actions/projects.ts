@@ -49,7 +49,6 @@ export async function createProject(formData: FormData) {
       return { error: "프로젝트 생성에 실패했습니다" };
     }
 
-    revalidatePath("/study");
     return { data };
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -143,8 +142,6 @@ export async function updateProject(projectId: string, formData: FormData) {
       return { error: "프로젝트 수정에 실패했습니다" };
     }
 
-    revalidatePath("/study");
-    revalidatePath(`/study/${projectId}`);
     return { data };
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -173,7 +170,7 @@ export async function deleteProject(projectId: string) {
     return { error: "프로젝트 삭제에 실패했습니다" };
   }
 
-  revalidatePath("/study");
+  revalidatePath("/study", "layout");
   return { success: true };
 }
 

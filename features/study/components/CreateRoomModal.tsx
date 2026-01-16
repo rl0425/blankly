@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/shared/ui/components/button";
 import { Label } from "@/shared/ui/components/label";
@@ -35,6 +35,8 @@ export function CreateRoomModal({
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [usePreviousSettings, setUsePreviousSettings] = useState(false);
   const [isLoadingSettings, setIsLoadingSettings] = useState(false);
+  const [isLoadingFile, setIsLoadingFile] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 에러 상태
   const [titleError, setTitleError] = useState("");
@@ -98,7 +100,8 @@ export function CreateRoomModal({
       const settings = await getLastRoomSettings(projectId);
 
       if (settings) {
-        // 제목 제외하고 모든 설정 불러오기
+        // 모든 설정 불러오기 (제목 포함)
+        if (settings.title) setTitle(settings.title);
         if (settings.source_data) setSourceData(settings.source_data);
         if (settings.total_problems) setProblemCount(settings.total_problems);
         if (settings.difficulty)
@@ -111,11 +114,7 @@ export function CreateRoomModal({
           setGradingStrictness(
             settings.grading_strictness as GradingStrictness
           );
-
-        toast({
-          title: "이전 설정을 불러왔습니다",
-          description: "제목은 직접 입력해주세요",
-        });
+        // 이전 설정을 불러왔으므로 토스트 메시지 표시하지 않음
       } else {
         toast({
           title: "이전 방이 없습니다",
@@ -134,6 +133,105 @@ export function CreateRoomModal({
       setUsePreviousSettings(false);
     } finally {
       setIsLoadingSettings(false);
+    }
+  };
+
+  // 파일 업로드 핸들러
+  const handleFileUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // 파일 타입 검증
+    const fileType = file.type;
+    const isTxt = fileType === "text/plain" || file.name.endsWith(".txt");
+    const isPdf = fileType === "application/pdf" || file.name.endsWith(".pdf");
+
+    if (!isTxt && !isPdf) {
+      toast({
+        title: "지원하지 않는 파일 형식",
+        description: "TXT 또는 PDF 파일만 업로드할 수 있습니다",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoadingFile(true);
+    try {
+      let text = "";
+
+      if (isTxt) {
+        // TXT 파일 읽기
+        text = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            resolve(e.target?.result as string);
+          };
+          reader.onerror = reject;
+          reader.readAsText(file, "UTF-8");
+        });
+      } else if (isPdf) {
+        // PDF 파일 읽기
+        const pdfjsLib = await import("pdfjs-dist");
+
+        // 워커 설정 (항상 설정)
+        // pdfjs-dist의 워커 경로를 명시적으로 설정
+        const workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+        pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
+
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const numPages = pdf.numPages;
+        const textPages: string[] = [];
+
+        for (let i = 1; i <= numPages; i++) {
+          const page = await pdf.getPage(i);
+          const textContent = await page.getTextContent();
+          const pageText = textContent.items
+            .map((item) => {
+              // TextItem 타입 체크
+              if ("str" in item && typeof item.str === "string") {
+                return item.str;
+              }
+              return "";
+            })
+            .join(" ");
+          textPages.push(pageText);
+        }
+
+        text = textPages.join("\n\n");
+      }
+
+      // 텍스트가 너무 짧으면 경고
+      if (text.trim().length < 100) {
+        toast({
+          title: "파일 내용이 부족합니다",
+          description: "최소 100자 이상의 내용이 필요합니다",
+          variant: "destructive",
+        });
+      } else {
+        // 학습 내용에 텍스트 설정
+        setSourceData(text.trim());
+        setSourceDataError("");
+        toast({
+          title: "파일 업로드 완료",
+          description: `${text.trim().length}자의 텍스트를 불러왔습니다`,
+        });
+      }
+    } catch (error) {
+      console.error("File upload error:", error);
+      toast({
+        title: "파일 읽기 실패",
+        description: "파일을 읽는 중 오류가 발생했습니다",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingFile(false);
+      // 파일 입력 초기화
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     }
   };
 
@@ -282,44 +380,42 @@ export function CreateRoomModal({
                   variant="ghost"
                   size="icon"
                   onClick={() => setIsOpen(false)}
-                  disabled={isLoading}
+                  disabled={isLoading || isLoadingSettings}
                 >
                   <X className="h-5 w-5" />
                 </Button>
               </div>
 
               {/* Content - 스크롤 가능 영역 */}
-              <div className="flex-1 overflow-y-auto">
+              <div className="flex-1 overflow-y-auto relative">
+                {/* 이전 설정 불러오기 체크박스 - 오른쪽 위 */}
+                <div className="absolute top-6 right-6 z-10 flex items-center gap-1.5">
+                  <input
+                    type="checkbox"
+                    id="usePreviousSettings"
+                    checked={usePreviousSettings}
+                    onChange={(e) => {
+                      setUsePreviousSettings(e.target.checked);
+                      if (e.target.checked) {
+                        handleLoadPreviousSettings();
+                      }
+                    }}
+                    disabled={isLoading || isLoadingSettings}
+                    className="w-3.5 h-3.5"
+                  />
+                  <Label
+                    htmlFor="usePreviousSettings"
+                    className="text-xs cursor-pointer text-muted-foreground"
+                  >
+                    {isLoadingSettings ? "불러오는 중..." : "이전 설정 사용"}
+                  </Label>
+                </div>
+
                 <form
                   id="room-form"
                   onSubmit={handleSubmit}
                   className="p-6 space-y-6"
                 >
-                  {/* 이전 설정 불러오기 체크박스 */}
-                  <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50">
-                    <input
-                      type="checkbox"
-                      id="usePreviousSettings"
-                      checked={usePreviousSettings}
-                      onChange={(e) => {
-                        setUsePreviousSettings(e.target.checked);
-                        if (e.target.checked) {
-                          handleLoadPreviousSettings();
-                        }
-                      }}
-                      disabled={isLoading || isLoadingSettings}
-                      className="w-4 h-4"
-                    />
-                    <Label
-                      htmlFor="usePreviousSettings"
-                      className="text-sm cursor-pointer"
-                    >
-                      {isLoadingSettings
-                        ? "설정 불러오는 중..."
-                        : "이전 방 설정 사용하기"}
-                    </Label>
-                  </div>
-
                   {/* 방 제목 */}
                   <div className="space-y-2">
                     <Label htmlFor="title">
@@ -337,10 +433,190 @@ export function CreateRoomModal({
                       className={`flex h-11 w-full rounded-xl border ${
                         titleError ? "border-destructive" : "border-input"
                       } bg-background px-4 py-2.5 text-sm`}
-                      disabled={isLoading}
+                      disabled={isLoading || isLoadingSettings}
                     />
                     {titleError && (
                       <p className="text-sm text-destructive">{titleError}</p>
+                    )}
+                  </div>
+
+                  {/* 문제 수 & 난이도 */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="problemCount">
+                        문제 수 <span className="text-destructive">*</span>
+                      </Label>
+                      <select
+                        id="problemCount"
+                        value={problemCount}
+                        onChange={(e) =>
+                          setProblemCount(Number(e.target.value))
+                        }
+                        className="flex h-11 w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm"
+                        disabled={isLoading || isLoadingSettings}
+                      >
+                        <option value={5}>5개</option>
+                        <option value={10}>10개</option>
+                        <option value={15}>15개</option>
+                        <option value={20}>20개</option>
+                        <option value={30}>30개</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="difficulty">
+                        난이도 <span className="text-destructive">*</span>
+                      </Label>
+                      <select
+                        id="difficulty"
+                        value={difficulty}
+                        onChange={(e) =>
+                          setDifficulty(
+                            e.target.value as "easy" | "medium" | "hard"
+                          )
+                        }
+                        className="flex h-11 w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm"
+                        disabled={isLoading || isLoadingSettings}
+                      >
+                        <option value="easy">쉬움</option>
+                        <option value="medium">보통</option>
+                        <option value="hard">어려움</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* 고급 설정 (접기/펼치기) */}
+                  <div className="border-t pt-4">
+                    <button
+                      type="button"
+                      onClick={() => setShowAdvanced(!showAdvanced)}
+                      className="flex items-center justify-between w-full text-sm font-medium hover:text-primary transition-colors"
+                      disabled={isLoading || isLoadingSettings}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Settings className="h-4 w-4" />
+                        고급 설정 (선택사항)
+                      </span>
+                      {showAdvanced ? (
+                        <ChevronUp className="h-4 w-4" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4" />
+                      )}
+                    </button>
+
+                    {showAdvanced && (
+                      <div className="mt-4 space-y-4 p-4 bg-muted/50 rounded-xl">
+                        {/* 문제 유형 비율 */}
+                        <div className="space-y-3">
+                          <Label>문제 유형 비율</Label>
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between text-sm">
+                              <span>주관식 (빈칸 채우기)</span>
+                              <span className="font-medium">
+                                {fillBlankRatio}%
+                              </span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0"
+                              max="100"
+                              step="10"
+                              value={fillBlankRatio}
+                              onChange={(e) =>
+                                setFillBlankRatio(Number(e.target.value))
+                              }
+                              className="w-full"
+                              disabled={isLoading || isLoadingSettings}
+                            />
+                            <div className="flex items-center justify-between text-sm text-muted-foreground">
+                              <span>객관식 {100 - fillBlankRatio}%</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 주관식 문제 유형 선택 */}
+                        {fillBlankRatio > 0 && (
+                          <div className="space-y-2">
+                            <Label>주관식 문제 유형</Label>
+                            <div className="space-y-2">
+                              <label className="flex items-center gap-2 text-sm">
+                                <input
+                                  type="radio"
+                                  name="subjectiveType"
+                                  checked={subjectiveType === "fill_blank"}
+                                  onChange={() =>
+                                    setSubjectiveType("fill_blank")
+                                  }
+                                  disabled={isLoading || isLoadingSettings}
+                                />
+                                <span>빈칸 채우기만</span>
+                              </label>
+                              <label className="flex items-center gap-2 text-sm">
+                                <input
+                                  type="radio"
+                                  name="subjectiveType"
+                                  checked={subjectiveType === "essay"}
+                                  onChange={() => setSubjectiveType("essay")}
+                                  disabled={isLoading || isLoadingSettings}
+                                />
+                                <span>서술형만 (면접형)</span>
+                              </label>
+                              <label className="flex items-center gap-2 text-sm">
+                                <input
+                                  type="radio"
+                                  name="subjectiveType"
+                                  checked={subjectiveType === "both"}
+                                  onChange={() => setSubjectiveType("both")}
+                                  disabled={isLoading || isLoadingSettings}
+                                />
+                                <span>둘 다 (빈칸 60~70%, 서술형 30~40%)</span>
+                              </label>
+                            </div>
+                            <p className="text-xs text-muted-foreground flex items-center gap-1">
+                              <Lightbulb className="h-3 w-3" />
+                              서술형 문제는 AI가 채점하며, 50~100자 이내로
+                              답변합니다
+                            </p>
+                          </div>
+                        )}
+
+                        {/* 주관식 채점 기준 */}
+                        <div className="space-y-2">
+                          <Label>주관식 채점 기준 (빈칸 채우기용)</Label>
+                          <div className="space-y-2">
+                            <label className="flex items-center gap-2 text-sm">
+                              <input
+                                type="radio"
+                                name="strictness"
+                                checked={gradingStrictness === "lenient"}
+                                onChange={() => setGradingStrictness("lenient")}
+                                disabled={isLoading || isLoadingSettings}
+                              />
+                              <span>느슨 (키워드만 포함하면 정답)</span>
+                            </label>
+                            <label className="flex items-center gap-2 text-sm">
+                              <input
+                                type="radio"
+                                name="strictness"
+                                checked={gradingStrictness === "normal"}
+                                onChange={() => setGradingStrictness("normal")}
+                                disabled={isLoading || isLoadingSettings}
+                              />
+                              <span>보통 (의미가 유사하면 정답)</span>
+                            </label>
+                            <label className="flex items-center gap-2 text-sm">
+                              <input
+                                type="radio"
+                                name="strictness"
+                                checked={gradingStrictness === "strict"}
+                                onChange={() => setGradingStrictness("strict")}
+                                disabled={isLoading || isLoadingSettings}
+                              />
+                              <span>엄격 (정확히 일치해야 정답)</span>
+                            </label>
+                          </div>
+                        </div>
+                      </div>
                     )}
                   </div>
 
@@ -364,7 +640,7 @@ export function CreateRoomModal({
                           checked={generationMode === "user_data"}
                           onChange={() => setGenerationMode("user_data")}
                           className="w-4 h-4"
-                          disabled={isLoading}
+                          disabled={isLoading || isLoadingSettings}
                         />
                         <div className="flex-1">
                           <p className="font-medium flex items-center gap-2">
@@ -390,7 +666,7 @@ export function CreateRoomModal({
                           checked={generationMode === "hybrid"}
                           onChange={() => setGenerationMode("hybrid")}
                           className="w-4 h-4"
-                          disabled={isLoading}
+                          disabled={isLoading || isLoadingSettings}
                         />
                         <div className="flex-1">
                           <p className="font-medium flex items-center gap-2">
@@ -417,7 +693,7 @@ export function CreateRoomModal({
                           checked={generationMode === "ai_only"}
                           onChange={() => setGenerationMode("ai_only")}
                           className="w-4 h-4"
-                          disabled={isLoading}
+                          disabled={isLoading || isLoadingSettings}
                         />
                         <div className="flex-1">
                           <p className="font-medium flex items-center gap-2">
@@ -481,7 +757,7 @@ export function CreateRoomModal({
                             ? "border-destructive"
                             : "border-input"
                         } bg-background px-4 py-3 text-sm min-h-[200px] resize-y`}
-                        disabled={isLoading}
+                        disabled={isLoading || isLoadingSettings}
                       />
                       {sourceDataError && (
                         <p className="text-sm text-destructive">
@@ -490,16 +766,34 @@ export function CreateRoomModal({
                       )}
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
                         <span>{sourceData.length}자 / 최소 100자</span>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="h-7"
-                          disabled={isLoading}
-                        >
-                          <Upload className="h-3 w-3 mr-2" />
-                          파일 업로드 (TXT, PDF)
-                        </Button>
+                        <div className="relative">
+                          <input
+                            type="file"
+                            ref={fileInputRef}
+                            accept=".txt,.pdf,text/plain,application/pdf"
+                            onChange={handleFileUpload}
+                            className="hidden"
+                            id="file-upload"
+                            disabled={
+                              isLoading || isLoadingSettings || isLoadingFile
+                            }
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-7"
+                            disabled={
+                              isLoading || isLoadingSettings || isLoadingFile
+                            }
+                            onClick={() => fileInputRef.current?.click()}
+                          >
+                            <Upload className="h-3 w-3 mr-2" />
+                            {isLoadingFile
+                              ? "파일 읽는 중..."
+                              : "파일 업로드 (TXT, PDF)"}
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -514,7 +808,7 @@ export function CreateRoomModal({
                         onChange={(e) => setAiPrompt(e.target.value)}
                         placeholder="추가 지시사항을 입력하세요... (비워두면 프로젝트 기본 프롬프트 사용)&#10;&#10;예시:&#10;- 토익 RC Part 5 문법 문제&#10;- 비즈니스 영어 위주&#10;- 동사 시제 관련 문제 많이"
                         className="flex w-full rounded-xl border border-input bg-background px-4 py-3 text-sm min-h-[120px] resize-y"
-                        disabled={isLoading}
+                        disabled={isLoading || isLoadingSettings}
                       />
                       <p className="text-xs text-muted-foreground flex items-center gap-1">
                         <Lightbulb className="h-3 w-3" />
@@ -522,186 +816,6 @@ export function CreateRoomModal({
                       </p>
                     </div>
                   )}
-
-                  {/* 문제 수 & 난이도 */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="problemCount">
-                        문제 수 <span className="text-destructive">*</span>
-                      </Label>
-                      <select
-                        id="problemCount"
-                        value={problemCount}
-                        onChange={(e) =>
-                          setProblemCount(Number(e.target.value))
-                        }
-                        className="flex h-11 w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm"
-                        disabled={isLoading}
-                      >
-                        <option value={5}>5개</option>
-                        <option value={10}>10개</option>
-                        <option value={15}>15개</option>
-                        <option value={20}>20개</option>
-                        <option value={30}>30개</option>
-                      </select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="difficulty">
-                        난이도 <span className="text-destructive">*</span>
-                      </Label>
-                      <select
-                        id="difficulty"
-                        value={difficulty}
-                        onChange={(e) =>
-                          setDifficulty(
-                            e.target.value as "easy" | "medium" | "hard"
-                          )
-                        }
-                        className="flex h-11 w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm"
-                        disabled={isLoading}
-                      >
-                        <option value="easy">쉬움</option>
-                        <option value="medium">보통</option>
-                        <option value="hard">어려움</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* 고급 설정 (접기/펼치기) */}
-                  <div className="border-t pt-4">
-                    <button
-                      type="button"
-                      onClick={() => setShowAdvanced(!showAdvanced)}
-                      className="flex items-center justify-between w-full text-sm font-medium hover:text-primary transition-colors"
-                      disabled={isLoading}
-                    >
-                      <span className="flex items-center gap-2">
-                        <Settings className="h-4 w-4" />
-                        고급 설정 (선택사항)
-                      </span>
-                      {showAdvanced ? (
-                        <ChevronUp className="h-4 w-4" />
-                      ) : (
-                        <ChevronDown className="h-4 w-4" />
-                      )}
-                    </button>
-
-                    {showAdvanced && (
-                      <div className="mt-4 space-y-4 p-4 bg-muted/50 rounded-xl">
-                        {/* 문제 유형 비율 */}
-                        <div className="space-y-3">
-                          <Label>문제 유형 비율</Label>
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between text-sm">
-                              <span>주관식 (빈칸 채우기)</span>
-                              <span className="font-medium">
-                                {fillBlankRatio}%
-                              </span>
-                            </div>
-                            <input
-                              type="range"
-                              min="0"
-                              max="100"
-                              step="10"
-                              value={fillBlankRatio}
-                              onChange={(e) =>
-                                setFillBlankRatio(Number(e.target.value))
-                              }
-                              className="w-full"
-                              disabled={isLoading}
-                            />
-                            <div className="flex items-center justify-between text-sm text-muted-foreground">
-                              <span>객관식 {100 - fillBlankRatio}%</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* 주관식 문제 유형 선택 */}
-                        {fillBlankRatio > 0 && (
-                          <div className="space-y-2">
-                            <Label>주관식 문제 유형</Label>
-                            <div className="space-y-2">
-                              <label className="flex items-center gap-2 text-sm">
-                                <input
-                                  type="radio"
-                                  name="subjectiveType"
-                                  checked={subjectiveType === "fill_blank"}
-                                  onChange={() =>
-                                    setSubjectiveType("fill_blank")
-                                  }
-                                  disabled={isLoading}
-                                />
-                                <span>빈칸 채우기만</span>
-                              </label>
-                              <label className="flex items-center gap-2 text-sm">
-                                <input
-                                  type="radio"
-                                  name="subjectiveType"
-                                  checked={subjectiveType === "essay"}
-                                  onChange={() => setSubjectiveType("essay")}
-                                  disabled={isLoading}
-                                />
-                                <span>서술형만 (면접형)</span>
-                              </label>
-                              <label className="flex items-center gap-2 text-sm">
-                                <input
-                                  type="radio"
-                                  name="subjectiveType"
-                                  checked={subjectiveType === "both"}
-                                  onChange={() => setSubjectiveType("both")}
-                                  disabled={isLoading}
-                                />
-                                <span>둘 다 (빈칸 60~70%, 서술형 30~40%)</span>
-                              </label>
-                            </div>
-                            <p className="text-xs text-muted-foreground flex items-center gap-1">
-                              <Lightbulb className="h-3 w-3" />
-                              서술형 문제는 AI가 채점하며, 50~100자 이내로
-                              답변합니다
-                            </p>
-                          </div>
-                        )}
-
-                        {/* 주관식 채점 기준 */}
-                        <div className="space-y-2">
-                          <Label>주관식 채점 기준 (빈칸 채우기용)</Label>
-                          <div className="space-y-2">
-                            <label className="flex items-center gap-2 text-sm">
-                              <input
-                                type="radio"
-                                name="strictness"
-                                checked={gradingStrictness === "lenient"}
-                                onChange={() => setGradingStrictness("lenient")}
-                                disabled={isLoading}
-                              />
-                              <span>느슨 (키워드만 포함하면 정답)</span>
-                            </label>
-                            <label className="flex items-center gap-2 text-sm">
-                              <input
-                                type="radio"
-                                name="strictness"
-                                checked={gradingStrictness === "normal"}
-                                onChange={() => setGradingStrictness("normal")}
-                                disabled={isLoading}
-                              />
-                              <span>보통 (의미가 유사하면 정답)</span>
-                            </label>
-                            <label className="flex items-center gap-2 text-sm">
-                              <input
-                                type="radio"
-                                name="strictness"
-                                checked={gradingStrictness === "strict"}
-                                onChange={() => setGradingStrictness("strict")}
-                                disabled={isLoading}
-                              />
-                              <span>엄격 (정확히 일치해야 정답)</span>
-                            </label>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
                 </form>
               </div>
 
@@ -711,14 +825,14 @@ export function CreateRoomModal({
                   type="button"
                   variant="outline"
                   onClick={() => setIsOpen(false)}
-                  disabled={isLoading}
+                  disabled={isLoading || isLoadingSettings}
                   className="flex-1"
                 >
                   취소
                 </Button>
                 <Button
                   type="submit"
-                  disabled={isLoading}
+                  disabled={isLoading || isLoadingSettings}
                   className="flex-1"
                   form="room-form"
                 >
@@ -728,7 +842,24 @@ export function CreateRoomModal({
                 </Button>
               </div>
 
-              {/* 로딩 오버레이 */}
+              {/* 설정 불러오기 로딩 오버레이 */}
+              {isLoadingSettings && (
+                <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-[100] rounded-t-2xl md:rounded-2xl">
+                  <div className="flex flex-col items-center gap-4 p-8 bg-card rounded-xl shadow-lg">
+                    <div className="relative w-12 h-12">
+                      <div className="absolute inset-0 border-4 border-primary/20 rounded-full"></div>
+                      <div className="absolute inset-0 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm font-medium">
+                        이전 설정 불러오는 중...
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 문제 생성 로딩 오버레이 */}
               {isLoading && (
                 <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-[100] rounded-t-2xl md:rounded-2xl">
                   <div className="flex flex-col items-center gap-4 p-8 bg-card rounded-xl shadow-lg">

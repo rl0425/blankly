@@ -89,6 +89,14 @@
     min-height: 100dvh; /* 동적 뷰포트 높이 */
     /* 스크롤바로 인한 레이아웃 시프트 방지 (macOS에서는 스크롤바가 오버레이로 표시됨) */
     position: relative;
+    /* 전역적으로 텍스트 커서 숨기기 */
+    caret-color: transparent;
+  }
+
+  /* input과 textarea에서는 커서 보이기 */
+  input,
+  textarea {
+    caret-color: auto;
   }
 
   /* 스크롤바가 있는 경우를 위한 안전장치 */
@@ -141,5 +149,31 @@
   [role="button"]:disabled,
   select:disabled {
     cursor: not-allowed;
+  }
+
+  /* 얇고 희미한 스크롤바 스타일 */
+  .thin-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.2) transparent;
+  }
+
+  /* Webkit 브라우저용 스크롤바 스타일 */
+  .thin-scrollbar::-webkit-scrollbar {
+    height: 6px;
+    width: 6px;
+  }
+
+  .thin-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .thin-scrollbar::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--muted-foreground) / 0.2);
+    border-radius: 3px;
+    transition: background-color 0.2s ease;
+  }
+
+  .thin-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--muted-foreground) / 0.35);
   }
 }

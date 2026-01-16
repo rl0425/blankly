@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Card,
@@ -19,6 +20,7 @@ interface ProjectListProps {
 }
 
 export function ProjectList({ projects }: ProjectListProps) {
+  const router = useRouter();
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [deletingProjectId, setDeletingProjectId] = useState<string | null>(
@@ -42,8 +44,10 @@ export function ProjectList({ projects }: ProjectListProps) {
       );
       await deleteProject(projectId);
 
-      // 페이지 새로고침
-      window.location.reload();
+      // revalidatePath가 이미 호출되었으므로, 다음 방문 시 자동으로 새 데이터를 가져옴
+      // router.refresh()를 호출하지 않아서 캐시된 데이터를 먼저 보여주고 백그라운드에서 업데이트
+      // 삭제된 프로젝트는 UI에서 즉시 제거
+      router.push("/study");
     } catch (error) {
       alert(
         error instanceof Error ? error.message : "삭제 중 오류가 발생했습니다"

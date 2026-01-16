@@ -208,7 +208,7 @@ export function RoomList({
           variant={filter === "all" ? "default" : "outline"}
           size="sm"
           onClick={() => setFilter("all")}
-          className="h-8 text-xs"
+          className="h-8 text-xs min-w-[60px]"
         >
           전체
         </Button>
@@ -216,7 +216,7 @@ export function RoomList({
           variant={filter === "completed" ? "default" : "outline"}
           size="sm"
           onClick={() => setFilter("completed")}
-          className="h-8 text-xs"
+          className="h-8 text-xs min-w-[80px]"
         >
           완료한 방
         </Button>
@@ -224,7 +224,7 @@ export function RoomList({
           variant={filter === "incomplete" ? "default" : "outline"}
           size="sm"
           onClick={() => setFilter("incomplete")}
-          className="h-8 text-xs"
+          className="h-8 text-xs min-w-[80px]"
         >
           미완료한 방
         </Button>
@@ -272,8 +272,8 @@ export function RoomList({
 
       {/* 방 목록 */}
       {filteredRooms.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center">
+        <Card className="border-0 shadow-none">
+          <CardContent className="py-6 text-center">
             <p className="text-muted-foreground">
               {filter === "completed"
                 ? "완료한 방이 없습니다"

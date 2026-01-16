@@ -16,9 +16,17 @@ import {
   Trophy,
   Inbox,
   Sparkles,
+  RotateCcw,
+  Check,
 } from "lucide-react";
 import type { Problem, Room, AIGradeResponse } from "@/shared/types";
 import Link from "next/link";
+
+type AnswerData = {
+  user_answer: string;
+  is_correct: boolean;
+  ai_feedback: AIGradeResponse | null;
+};
 
 export default function RoomProblemPage({
   params,
@@ -42,6 +50,7 @@ export default function RoomProblemPage({
   const [initialLoading, setInitialLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [showCompletionModal, setShowCompletionModal] = useState(false);
+  const [isReadOnly, setIsReadOnly] = useState(false); // 읽기 전용 모드 (완료한 방, 틀린 문제 다시 보기)
 
   const router = useRouter();
   const { toast } = useToast();
@@ -61,6 +70,44 @@ export default function RoomProblemPage({
       if (!roomResponse.ok) throw new Error("방 정보를 가져올 수 없습니다");
       const { data: roomData } = await roomResponse.json();
       setRoom(roomData);
+
+      // 방이 완료되었는지 확인 (세션 조회)
+      const sessionResponse = await fetch(
+        `/api/rooms/${resolvedParams.roomId}/session`
+      );
+      if (sessionResponse.ok) {
+        const { data: sessionData } = await sessionResponse.json();
+        const completed = sessionData?.is_completed || false;
+        setIsReadOnly(completed); // 완료한 방이면 읽기 전용 모드
+
+        // 완료한 방이면 이전 답안과 결과 불러오기
+        if (completed) {
+          const answersResponse = await fetch(
+            `/api/rooms/${resolvedParams.roomId}/answers`
+          );
+          if (answersResponse.ok) {
+            const { data: answersData } = await answersResponse.json();
+            // 답안 설정
+            const loadedAnswers: Record<string, string> = {};
+            const loadedResults: Record<
+              string,
+              { isCorrect: boolean; feedback?: AIGradeResponse }
+            > = {};
+
+            Object.entries(answersData).forEach(([problemId, answerData]) => {
+              const typedAnswerData = answerData as AnswerData;
+              loadedAnswers[problemId] = typedAnswerData.user_answer;
+              loadedResults[problemId] = {
+                isCorrect: typedAnswerData.is_correct,
+                feedback: typedAnswerData.ai_feedback || undefined,
+              };
+            });
+
+            setAnswers(loadedAnswers);
+            setResults(loadedResults);
+          }
+        }
+      }
 
       // 문제 목록 가져오기
       const problemsResponse = await fetch(
@@ -99,6 +146,24 @@ export default function RoomProblemPage({
 
   const handleSubmit = async () => {
     if (!currentProblem || !resolvedParams) return;
+
+    // 읽기 전용 모드면 제출 불가
+    if (isReadOnly) {
+      toast({
+        title: "읽기 전용 모드",
+        description: "이미 완료한 방입니다. 답안을 수정할 수 없습니다.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // 이미 제출된 문제면 다시 제출하지 않음
+    if (results[currentProblem.id]) {
+      setShowResult(true);
+      setIsCorrect(results[currentProblem.id].isCorrect);
+      setAiFeedback(results[currentProblem.id].feedback || null);
+      return;
+    }
 
     const userAnswer = answers[currentProblem.id] || "";
 
@@ -158,13 +223,44 @@ export default function RoomProblemPage({
   };
 
   const handleNext = async () => {
+    // 읽기 전용 모드이고 마지막 문제일 때 방 리스트로 돌아가기
+    if (isReadOnly && currentIndex === problems.length - 1) {
+      if (resolvedParams) {
+        router.push(`/study/${resolvedParams.projectId}`);
+      }
+      return;
+    }
+
+    // 읽기 전용 모드가 아니고, 모든 문제를 다 풀었는지 확인
+    const allProblemsSolved = problems.every((p) => results[p.id]);
+
+    if (
+      !isReadOnly &&
+      allProblemsSolved &&
+      currentIndex === problems.length - 1
+    ) {
+      // 모든 문제 완료 - 완료 모달 표시
+      setShowCompletionModal(true);
+      return;
+    }
+
     setShowResult(false);
     setIsCorrect(false);
     setAiFeedback(null);
 
     if (currentIndex < problems.length - 1) {
-      setCurrentIndex(currentIndex + 1);
-    } else {
+      const nextIndex = currentIndex + 1;
+      setCurrentIndex(nextIndex);
+
+      // 다음 문제의 결과가 있으면 복원 (읽기 전용 모드 또는 이미 제출된 문제)
+      const nextProblem = problems[nextIndex];
+      const nextResult = results[nextProblem.id];
+      if (nextResult) {
+        setShowResult(true);
+        setIsCorrect(nextResult.isCorrect);
+        setAiFeedback(nextResult.feedback || null);
+      }
+    } else if (!isReadOnly && allProblemsSolved) {
       // 모든 문제 완료 - 완료 모달 표시
       setShowCompletionModal(true);
     }
@@ -201,15 +297,51 @@ export default function RoomProblemPage({
     }
   };
 
-  const handleRetry = () => {
-    // 다시 풀어보기 - 상태 초기화
-    setAnswers({});
-    setResults({});
-    setCurrentIndex(0);
-    setShowCompletionModal(false);
-    setShowResult(false);
-    setIsCorrect(false);
-    setAiFeedback(null);
+  const handleRetry = async () => {
+    if (!resolvedParams) return;
+
+    setSubmitting(true);
+
+    try {
+      // 세션 삭제 및 방 상태 초기화
+      const response = await fetch(
+        `/api/rooms/${resolvedParams.roomId}/reset`,
+        {
+          method: "POST",
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("초기화에 실패했습니다");
+      }
+
+      // 상태 초기화
+      setAnswers({});
+      setResults({});
+      setCurrentIndex(0);
+      setShowCompletionModal(false);
+      setShowResult(false);
+      setIsCorrect(false);
+      setAiFeedback(null);
+      setIsReadOnly(false);
+
+      toast({
+        title: "초기화 완료",
+        description: "처음부터 다시 풀 수 있습니다",
+      });
+    } catch (error) {
+      console.error("초기화 오류:", error);
+      toast({
+        title: "초기화 실패",
+        description:
+          error instanceof Error
+            ? error.message
+            : "초기화 중 오류가 발생했습니다",
+        variant: "destructive",
+      });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleReviewWrong = () => {
@@ -223,6 +355,7 @@ export default function RoomProblemPage({
       setCurrentIndex(wrongProblemIndex);
       setShowCompletionModal(false);
       setShowResult(true);
+      setIsReadOnly(true); // 읽기 전용 모드로 전환
       const problem = problems[wrongProblemIndex];
       const result = results[problem.id];
       setIsCorrect(result.isCorrect);
@@ -242,9 +375,12 @@ export default function RoomProblemPage({
         setIsCorrect(prevResult.isCorrect);
         setAiFeedback(prevResult.feedback || null);
       } else {
-        setShowResult(false);
-        setIsCorrect(false);
-        setAiFeedback(null);
+        // 읽기 전용 모드가 아니면 결과 숨김
+        if (!isReadOnly) {
+          setShowResult(false);
+          setIsCorrect(false);
+          setAiFeedback(null);
+        }
       }
 
       setCurrentIndex(prevIndex);
@@ -390,7 +526,7 @@ export default function RoomProblemPage({
       </div>
 
       {/* Sticky 헤더 높이만큼 padding-top 추가 (약 140px) */}
-      <div className="pt-[140px]">
+      <div className="pt-[140px] pb-24">
         <main className="container mx-auto px-4 py-8 max-w-2xl">
           {/* Problem Card */}
           <ProblemCard
@@ -404,7 +540,7 @@ export default function RoomProblemPage({
               problem={currentProblem}
               value={answers[currentProblem.id] || ""}
               onChange={handleAnswer}
-              disabled={showResult}
+              disabled={showResult || isReadOnly}
               onSubmit={showResult ? handleNext : handleSubmit}
             />
           </ProblemCard>
@@ -460,21 +596,29 @@ export default function RoomProblemPage({
                 </p>
               </div>
 
-              {/* 정답으로 처리하기 버튼 */}
-              <Button
-                variant="outline"
-                onClick={handleMarkAsCorrect}
-                disabled={submitting}
-                className="w-full"
-              >
-                <CheckCircle className="h-4 w-4 mr-2" />
-                {submitting ? "처리 중..." : "AI가 틀렸어요! 정답으로 처리하기"}
-              </Button>
+              {/* 정답으로 처리하기 버튼 (읽기 전용 모드가 아닐 때만 표시) */}
+              {!isReadOnly && (
+                <Button
+                  variant="outline"
+                  onClick={handleMarkAsCorrect}
+                  disabled={submitting}
+                  className="w-full"
+                >
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  {submitting
+                    ? "처리 중..."
+                    : "AI가 틀렸어요! 정답으로 처리하기"}
+                </Button>
+              )}
             </div>
           )}
+        </main>
+      </div>
 
-          {/* Navigation Buttons */}
-          <div className="mt-6 flex gap-3">
+      {/* Navigation Buttons - 하단 고정 (네비게이션 바 위) */}
+      <div className="fixed bottom-16 left-0 right-0 z-40 bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60 border-t">
+        <div className="container mx-auto px-4 py-4 max-w-2xl">
+          <div className="flex gap-3">
             <Button
               variant="outline"
               onClick={handlePrevious}
@@ -487,8 +631,10 @@ export default function RoomProblemPage({
 
             {!showResult ? (
               <Button
-                onClick={handleSubmit}
-                disabled={!answers[currentProblem.id] || submitting}
+                onClick={isReadOnly ? handleNext : handleSubmit}
+                disabled={
+                  isReadOnly ? false : !answers[currentProblem.id] || submitting
+                }
                 className="flex-1"
               >
                 {submitting ? (
@@ -496,6 +642,10 @@ export default function RoomProblemPage({
                     <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent"></div>
                     채점 중...
                   </>
+                ) : isReadOnly && currentIndex === problems.length - 1 ? (
+                  "완료"
+                ) : isReadOnly ? (
+                  "다음"
                 ) : (
                   "제출"
                 )}
@@ -519,7 +669,7 @@ export default function RoomProblemPage({
               </Button>
             )}
           </div>
-        </main>
+        </div>
       </div>
 
       {/* 완료 모달 */}
@@ -577,7 +727,8 @@ export default function RoomProblemPage({
                   variant="outline"
                   className="w-full"
                 >
-                  ❌ 틀린 문제 다시 보기
+                  <XCircle className="h-4 w-4 mr-2" />
+                  틀린 문제 다시 보기
                 </Button>
               )}
 
@@ -586,7 +737,8 @@ export default function RoomProblemPage({
                 variant="outline"
                 className="w-full"
               >
-                🔄 처음부터 다시 풀기
+                <RotateCcw className="h-4 w-4 mr-2" />
+                처음부터 다시 풀기
               </Button>
 
               <Button
@@ -594,7 +746,14 @@ export default function RoomProblemPage({
                 disabled={submitting}
                 className="w-full"
               >
-                {submitting ? "완료 처리 중..." : "✅ 완료하고 나가기"}
+                {submitting ? (
+                  "완료 처리 중..."
+                ) : (
+                  <>
+                    <Check className="h-4 w-4 mr-2" />
+                    완료하고 나가기
+                  </>
+                )}
               </Button>
             </div>
           </div>

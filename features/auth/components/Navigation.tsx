@@ -31,9 +31,10 @@ export function Navigation() {
       <div className="container flex h-16 items-center justify-around px-4 mx-auto">
         {navItems.map((item) => {
           // /study로 시작하는 경로도 "학습" 탭 활성화
-          const isActive = item.href === "/study" 
-            ? pathname === item.href || pathname.startsWith("/study")
-            : pathname === item.href;
+          const isActive =
+            item.href === "/study"
+              ? pathname === item.href || pathname.startsWith("/study")
+              : pathname === item.href;
           const Icon = item.icon;
 
           return (
@@ -56,4 +57,3 @@ export function Navigation() {
     </nav>
   );
 }
-

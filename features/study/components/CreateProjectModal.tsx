@@ -2,20 +2,14 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/shared/ui/components/dialog";
+import { createPortal } from "react-dom";
 import { Button } from "@/shared/ui/components/button";
 import { Input } from "@/shared/ui/components/input";
 import { Label } from "@/shared/ui/components/label";
 import { useToast } from "@/shared/hooks/use-toast";
 import { createClient } from "@/shared/lib/supabase/client";
-import { Plus } from "lucide-react";
+import { Plus, X } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import type { Project } from "@/shared/types";
 
 interface CreateProjectModalProps {
@@ -56,6 +50,32 @@ export function CreateProjectModal({
       });
     }
   }, [editMode, initialData]);
+
+  // 바텀시트 열릴 때 body scroll lock
+  useEffect(() => {
+    if (open) {
+      const scrollY = window.scrollY;
+      document.body.style.position = "fixed";
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.width = "100%";
+      document.documentElement.style.overflow = "hidden";
+    } else {
+      const scrollY = document.body.style.top;
+      document.body.style.position = "";
+      document.body.style.top = "";
+      document.body.style.width = "";
+      document.documentElement.style.overflow = "";
+      if (scrollY) {
+        window.scrollTo(0, parseInt(scrollY || "0") * -1);
+      }
+    }
+    return () => {
+      document.body.style.position = "";
+      document.body.style.top = "";
+      document.body.style.width = "";
+      document.documentElement.style.overflow = "";
+    };
+  }, [open]);
 
   const router = useRouter();
   const { toast } = useToast();
@@ -141,8 +161,8 @@ export function CreateProjectModal({
         onClose();
       }
 
-      // 페이지 새로고침
-      window.location.reload();
+      // 프로젝트 리스트를 다시 불러오기
+      router.refresh();
     } catch (error) {
       toast({
         title: "오류 발생",
@@ -166,132 +186,194 @@ export function CreateProjectModal({
     }
   };
 
-  return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      {!editMode && (
-        <DialogTrigger asChild>
-          <Button size="sm" onClick={() => setOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" />새 프로젝트
-          </Button>
-        </DialogTrigger>
-      )}
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>
-            {editMode ? "프로젝트 수정" : "새 프로젝트 만들기"}
-          </DialogTitle>
-          <DialogDescription>
-            프로젝트의 기본 설정을 입력하세요. 이 설정은 모든 방에서 사용됩니다.
-          </DialogDescription>
-        </DialogHeader>
-        <form
-          onSubmit={handleSubmit}
-          className="space-y-4 mt-4 max-h-[60vh] overflow-y-auto"
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const modalContent = (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-[100] p-0 md:p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !loading) {
+              handleOpenChange(false);
+            }
+          }}
         >
-          <div className="space-y-2">
-            <Label htmlFor="title">프로젝트 제목 *</Label>
-            <Input
-              id="title"
-              value={formData.title}
-              onChange={(e) =>
-                setFormData({ ...formData, title: e.target.value })
-              }
-              placeholder="예: 토익 RC 정복하기"
-              required
-            />
-          </div>
+          <motion.div
+            initial={{ y: "100%", opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: "100%", opacity: 0 }}
+            transition={{ type: "spring", damping: 30, stiffness: 300 }}
+            className="bg-background rounded-t-2xl md:rounded-2xl max-w-2xl w-full max-h-[calc(100vh-4rem)] md:max-h-[90vh] flex flex-col relative md:initial md:translate-y-0 md:animate-none"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="sticky top-0 bg-background border-b px-6 py-4 flex items-center justify-between shrink-0 z-10">
+              <div>
+                <h2 className="text-xl font-bold">
+                  {editMode ? "프로젝트 수정" : "새 프로젝트 만들기"}
+                </h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  프로젝트의 기본 설정을 입력하세요. 이 설정은 모든 방에서
+                  사용됩니다.
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => handleOpenChange(false)}
+                disabled={loading}
+              >
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="category">카테고리 *</Label>
-            <select
-              id="category"
-              value={formData.category}
-              onChange={(e) =>
-                setFormData({ ...formData, category: e.target.value })
-              }
-              className="flex h-11 w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm"
-            >
-              <option value="영어">영어</option>
-              <option value="코딩">코딩</option>
-              <option value="자격증">자격증</option>
-              <option value="기타">기타</option>
-            </select>
-          </div>
+            {/* Content - 스크롤 가능 영역 */}
+            <div className="flex-1 overflow-y-auto">
+              <form
+                id="project-form"
+                onSubmit={handleSubmit}
+                className="p-6 space-y-4"
+              >
+                <div className="space-y-2">
+                  <Label htmlFor="title">프로젝트 제목 *</Label>
+                  <Input
+                    id="title"
+                    value={formData.title}
+                    onChange={(e) =>
+                      setFormData({ ...formData, title: e.target.value })
+                    }
+                    placeholder="예: 토익 RC 정복하기"
+                    required
+                    disabled={loading}
+                  />
+                </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="description">설명</Label>
-            <Input
-              id="description"
-              value={formData.description}
-              onChange={(e) =>
-                setFormData({ ...formData, description: e.target.value })
-              }
-              placeholder="예: 토익 시험 대비 문법 학습"
-            />
-          </div>
+                <div className="space-y-2">
+                  <Label htmlFor="category">카테고리 *</Label>
+                  <select
+                    id="category"
+                    value={formData.category}
+                    onChange={(e) =>
+                      setFormData({ ...formData, category: e.target.value })
+                    }
+                    className="flex h-11 w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm"
+                    disabled={loading}
+                  >
+                    <option value="영어">영어</option>
+                    <option value="코딩">코딩</option>
+                    <option value="자격증">자격증</option>
+                    <option value="기타">기타</option>
+                  </select>
+                </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="role">AI 역할 설정 *</Label>
-            <textarea
-              id="role"
-              value={formData.role}
-              onChange={(e) =>
-                setFormData({ ...formData, role: e.target.value })
-              }
-              placeholder="예: 당신은 토익 시험 전문가입니다."
-              className="flex min-h-[80px] w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm"
-              required
-            />
-            <p className="text-xs text-muted-foreground">
-              AI가 어떤 역할로 문제를 만들지 설정합니다
-            </p>
-          </div>
+                <div className="space-y-2">
+                  <Label htmlFor="description">설명</Label>
+                  <Input
+                    id="description"
+                    value={formData.description}
+                    onChange={(e) =>
+                      setFormData({ ...formData, description: e.target.value })
+                    }
+                    placeholder="예: 토익 시험 대비 문법 학습"
+                    disabled={loading}
+                  />
+                </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="basePrompt">기본 프롬프트 *</Label>
-            <textarea
-              id="basePrompt"
-              value={formData.basePrompt}
-              onChange={(e) =>
-                setFormData({ ...formData, basePrompt: e.target.value })
-              }
-              placeholder="예: 토익 RC Part 5 문법 문제를 출제해주세요. 실전과 유사한 난이도로 만들어주세요."
-              className="flex min-h-[100px] w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm"
-              required
-            />
-            <p className="text-xs text-muted-foreground">
-              모든 방에서 기본으로 사용될 프롬프트입니다
-            </p>
-          </div>
+                <div className="space-y-2">
+                  <Label htmlFor="role">AI 역할 설정 *</Label>
+                  <textarea
+                    id="role"
+                    value={formData.role}
+                    onChange={(e) =>
+                      setFormData({ ...formData, role: e.target.value })
+                    }
+                    placeholder="예: 당신은 토익 시험 전문가입니다."
+                    className="flex min-h-[80px] w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm resize-y"
+                    required
+                    disabled={loading}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    AI가 어떤 역할로 문제를 만들지 설정합니다
+                  </p>
+                </div>
 
-          <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => handleOpenChange(false)}
-            >
-              취소
-            </Button>
-            <Button
-              type="submit"
-              disabled={
-                loading ||
-                !formData.title ||
-                !formData.role ||
-                !formData.basePrompt
-              }
-            >
-              {loading
-                ? editMode
-                  ? "수정 중..."
-                  : "생성 중..."
-                : editMode
-                ? "프로젝트 수정"
-                : "프로젝트 생성"}
-            </Button>
-          </div>
-        </form>
-      </DialogContent>
-    </Dialog>
+                <div className="space-y-2">
+                  <Label htmlFor="basePrompt">기본 프롬프트 *</Label>
+                  <textarea
+                    id="basePrompt"
+                    value={formData.basePrompt}
+                    onChange={(e) =>
+                      setFormData({ ...formData, basePrompt: e.target.value })
+                    }
+                    placeholder="예: 토익 RC Part 5 문법 문제를 출제해주세요. 실전과 유사한 난이도로 만들어주세요."
+                    className="flex min-h-[100px] w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm resize-y"
+                    required
+                    disabled={loading}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    모든 방에서 기본으로 사용될 프롬프트입니다
+                  </p>
+                </div>
+              </form>
+            </div>
+
+            {/* 버튼 - 하단 고정 */}
+            <div className="sticky bottom-0 bg-background border-t px-6 py-4 flex gap-3 shrink-0 z-10 md:relative md:border-t-0 md:px-6 md:py-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => handleOpenChange(false)}
+                disabled={loading}
+                className="flex-1"
+              >
+                취소
+              </Button>
+              <Button
+                type="submit"
+                disabled={
+                  loading ||
+                  !formData.title ||
+                  !formData.role ||
+                  !formData.basePrompt
+                }
+                className="flex-1"
+                form="project-form"
+              >
+                {loading
+                  ? editMode
+                    ? "수정 중..."
+                    : "생성 중..."
+                  : editMode
+                  ? "프로젝트 수정"
+                  : "프로젝트 생성"}
+              </Button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
+  return (
+    <>
+      {!editMode && (
+        <Button size="sm" onClick={() => setOpen(true)}>
+          <Plus className="h-4 w-4 mr-2" />새 프로젝트
+        </Button>
+      )}
+
+      {mounted && typeof window !== "undefined"
+        ? createPortal(modalContent, document.body)
+        : null}
+    </>
   );
 }
