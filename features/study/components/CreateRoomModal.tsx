@@ -340,6 +340,20 @@ export function CreateRoomModal({
           return;
         }
 
+        // Rate limit 에러 처리
+        if (response.status === 429 || errorMessage.includes("Rate limit")) {
+          const rateLimitMessage = errorMessage.includes("try again in")
+            ? errorMessage
+            : "일일 토큰 한도를 초과했습니다. 잠시 후 다시 시도해주세요.";
+          toast({
+            title: "토큰 한도 초과",
+            description: rateLimitMessage,
+            variant: "destructive",
+          });
+          setIsLoading(false);
+          return;
+        }
+
         throw new Error(errorMessage);
       }
 

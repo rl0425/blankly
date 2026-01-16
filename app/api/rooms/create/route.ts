@@ -5,18 +5,12 @@ import {
   buildSystemPrompt,
   buildUserPrompt,
 } from "@/shared/lib/prompts/ai-prompts";
-
-interface AIProblem {
-  question: string;
-  type: string;
-  options?: string[];
-  correct_answer: string;
-  alternatives?: string[];
-  explanation?: string;
-  difficulty?: string;
-  max_length?: number;
-  source_excerpt?: string;
-}
+import {
+  generateCacheKey,
+  getCachedProblems,
+  setCachedProblems,
+  type AIProblem,
+} from "@/shared/lib/cache/problem-cache";
 
 export async function POST(request: NextRequest) {
   try {
@@ -111,56 +105,107 @@ export async function POST(request: NextRequest) {
 
     const dayNumber = (count || 0) + 1;
 
-    // 4. 생성 모드별 프롬프트 생성
-    const systemPrompt = buildSystemPrompt(generationMode, gradingStrictness);
-    const userPrompt = buildUserPrompt({
-      generationMode,
+    // 4. 캐시 키 생성 및 캐시 확인
+    const cacheKey = generateCacheKey({
       sourceData,
       aiPrompt,
       problemCount,
       difficulty,
       fillBlankRatio,
       subjectiveType,
-      project,
+      gradingStrictness,
+      generationMode,
     });
 
-    // 5. AI로 문제 생성
-    const completion = await groq.chat.completions.create({
-      messages: [
-        {
-          role: "system",
-          content: systemPrompt,
-        },
-        {
-          role: "user",
-          content: userPrompt,
-        },
-      ],
-      model: DEFAULT_MODEL,
-      temperature: generationMode === "user_data" ? 0.7 : 0.9, // 다양성 증가 (중복 방지)
-      max_tokens: 16000,
-      response_format: { type: "json_object" },
-    });
+    let problems: AIProblem[] | null = await getCachedProblems(cacheKey);
 
-    console.log("AI 응답 받음, 파싱 시작...");
+    // 캐시 미스 시 AI 호출
+    if (!problems) {
+      // 5. 생성 모드별 프롬프트 생성
+      const systemPrompt = buildSystemPrompt(generationMode, gradingStrictness);
+      const userPrompt = buildUserPrompt({
+        generationMode,
+        sourceData,
+        aiPrompt,
+        problemCount,
+        difficulty,
+        fillBlankRatio,
+        subjectiveType,
+        project,
+      });
 
-    const aiResponse = completion.choices[0]?.message?.content;
-    if (!aiResponse) {
-      throw new Error("AI 응답을 받지 못했습니다");
+      // 6. AI로 문제 생성
+    let completion;
+    try {
+      completion = await groq.chat.completions.create({
+        messages: [
+          {
+            role: "system",
+            content: systemPrompt,
+          },
+          {
+            role: "user",
+            content: userPrompt,
+          },
+        ],
+        model: DEFAULT_MODEL,
+        temperature: generationMode === "user_data" ? 0.7 : 0.9, // 다양성 증가 (중복 방지)
+        max_tokens: 16000,
+        response_format: { type: "json_object" },
+      });
+    } catch (groqError: unknown) {
+      // Groq API rate limit 에러 처리
+      if (
+        groqError &&
+        typeof groqError === "object" &&
+        "status" in groqError &&
+        groqError.status === 429
+      ) {
+        const errorMessage =
+          groqError &&
+          typeof groqError === "object" &&
+          "error" in groqError &&
+          typeof groqError.error === "object" &&
+          groqError.error !== null &&
+          "message" in groqError.error
+            ? String(groqError.error.message)
+            : "일일 토큰 한도를 초과했습니다. 잠시 후 다시 시도해주세요.";
+        return NextResponse.json(
+          { error: errorMessage },
+          { status: 429 }
+        );
+      }
+      throw groqError;
     }
 
-    const parsedResponse = JSON.parse(aiResponse);
-    const problems = parsedResponse.problems || [];
+      console.log("AI 응답 받음, 파싱 시작...");
 
-    if (problems.length === 0) {
-      throw new Error("AI가 문제를 생성하지 못했습니다");
+      const aiResponse = completion.choices[0]?.message?.content;
+      if (!aiResponse) {
+        throw new Error("AI 응답을 받지 못했습니다");
+      }
+
+      const parsedResponse = JSON.parse(aiResponse);
+      const generatedProblems: AIProblem[] = parsedResponse.problems || [];
+
+      if (generatedProblems.length === 0) {
+        throw new Error("AI가 문제를 생성하지 못했습니다");
+      }
+
+      if (generatedProblems.length < problemCount * 0.8) {
+        console.warn(`경고: 요청한 문제 수보다 현저히 적게 생성됨`);
+      }
+
+      problems = generatedProblems;
+
+      // 캐시 저장
+      await setCachedProblems(cacheKey, problems);
+      console.log("✅ 문제 캐시 저장 완료:", cacheKey);
+    } else {
+      console.log("✅ 캐시에서 문제 로드:", cacheKey);
     }
 
-    if (problems.length < problemCount * 0.8) {
-      console.warn(`경고: 요청한 문제 수보다 현저히 적게 생성됨`);
-    }
-
-    // 5. 방 생성
+    // 7. 방 생성
     const { data: room, error: roomError } = await supabase
       .from("rooms")
       .insert({
@@ -187,7 +232,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 6. 문제들을 DB에 저장
+    // 8. 문제들을 DB에 저장
     const problemsToInsert = problems.map(
       (problem: AIProblem, index: number) => ({
         room_id: room.id,
