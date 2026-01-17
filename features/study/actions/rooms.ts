@@ -10,39 +10,45 @@ type SessionWithRoomsData = {
   room_id: string;
   start_time: string;
   completed_at?: string | null;
-  rooms: {
-    id: string;
-    title: string;
-    total_problems: number;
-    difficulty: string;
-    project_id: string;
-    projects?: {
-      id: string;
-      title?: string;
-      deleted_at: string | null;
-    } | Array<{
-      id: string;
-      title?: string;
-      deleted_at: string | null;
-    }>;
-    deleted_at: string | null;
-  } | Array<{
-    id: string;
-    title: string;
-    total_problems: number;
-    difficulty: string;
-    project_id: string;
-    projects?: {
-      id: string;
-      title?: string;
-      deleted_at: string | null;
-    } | Array<{
-      id: string;
-      title?: string;
-      deleted_at: string | null;
-    }>;
-    deleted_at: string | null;
-  }>;
+  rooms:
+    | {
+        id: string;
+        title: string;
+        total_problems: number;
+        difficulty: string;
+        project_id: string;
+        projects?:
+          | {
+              id: string;
+              title?: string;
+              deleted_at: string | null;
+            }
+          | Array<{
+              id: string;
+              title?: string;
+              deleted_at: string | null;
+            }>;
+        deleted_at: string | null;
+      }
+    | Array<{
+        id: string;
+        title: string;
+        total_problems: number;
+        difficulty: string;
+        project_id: string;
+        projects?:
+          | {
+              id: string;
+              title?: string;
+              deleted_at: string | null;
+            }
+          | Array<{
+              id: string;
+              title?: string;
+              deleted_at: string | null;
+            }>;
+        deleted_at: string | null;
+      }>;
 };
 
 export async function getRoomsByProject(projectId: string) {
@@ -70,7 +76,7 @@ export async function getLastRoomSettings(projectId: string) {
   const { data, error } = await supabase
     .from("rooms")
     .select(
-      "title, total_problems, difficulty, generation_mode, source_data, fill_blank_ratio, grading_strictness"
+      "title, total_problems, difficulty, generation_mode, source_data, fill_blank_ratio, grading_strictness, complexity"
     )
     .eq("project_id", projectId)
     .is("deleted_at", null)
@@ -297,16 +303,16 @@ export async function getRecentRooms(userId: string, limit: number = 5) {
   sessions?.forEach((session) => {
     const sessionData = session as SessionWithRoomsData;
     // rooms는 배열일 수도 있고 단일 객체일 수도 있음
-    const rooms = Array.isArray(sessionData.rooms) 
-      ? sessionData.rooms[0] 
+    const rooms = Array.isArray(sessionData.rooms)
+      ? sessionData.rooms[0]
       : sessionData.rooms;
 
     if (rooms && !uniqueRooms.has(rooms.id)) {
       // projects도 배열일 수 있음
-      const project = Array.isArray(rooms.projects) 
-        ? rooms.projects[0] 
+      const project = Array.isArray(rooms.projects)
+        ? rooms.projects[0]
         : rooms.projects;
-      
+
       uniqueRooms.set(rooms.id, {
         id: rooms.id,
         title: rooms.title,

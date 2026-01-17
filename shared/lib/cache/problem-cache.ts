@@ -22,6 +22,7 @@ interface CacheKeyParams {
   subjectiveType: string;
   gradingStrictness: string;
   generationMode: string;
+  complexity?: string; // "simple" | "advanced"
 }
 
 /**
@@ -37,6 +38,7 @@ export function generateCacheKey(params: CacheKeyParams): string {
     subjectiveType,
     gradingStrictness,
     generationMode,
+    complexity,
   } = params;
 
   // 캐시 키에 포함할 데이터
@@ -49,6 +51,7 @@ export function generateCacheKey(params: CacheKeyParams): string {
     subjectiveType,
     gradingStrictness,
     generationMode,
+    complexity: complexity || "simple", // 기본값: simple
   });
 
   // SHA-256 해시 생성

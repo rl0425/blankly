@@ -26,6 +26,7 @@ export async function POST(request: NextRequest) {
       fillBlankRatio = 60,
       subjectiveType = "both", // 'fill_blank' | 'essay' | 'both'
       gradingStrictness = "normal",
+      complexity = "simple", // 'simple' | 'advanced'
     } = body;
 
     if (!projectId || !title) {
@@ -115,6 +116,7 @@ export async function POST(request: NextRequest) {
       subjectiveType,
       gradingStrictness,
       generationMode,
+      complexity: generationMode === "ai_only" ? complexity : undefined, // ai_only 모드일 때만 complexity 사용
     });
 
     let problems: AIProblem[] | null = await getCachedProblems(cacheKey);
@@ -122,7 +124,19 @@ export async function POST(request: NextRequest) {
     // 캐시 미스 시 AI 호출
     if (!problems) {
       // 5. 생성 모드별 프롬프트 생성
-      const systemPrompt = buildSystemPrompt(generationMode, gradingStrictness);
+      const finalComplexity =
+        generationMode === "ai_only" ? complexity : "simple";
+
+      // 디버그: complexity 전달 확인
+      console.log("[Room Create API] Generation Mode:", generationMode);
+      console.log("[Room Create API] Received Complexity:", complexity);
+      console.log("[Room Create API] Final Complexity:", finalComplexity);
+
+      const systemPrompt = buildSystemPrompt(
+        generationMode,
+        gradingStrictness,
+        aiPrompt || undefined // aiPrompt를 topic으로 전달
+      );
       const userPrompt = buildUserPrompt({
         generationMode,
         sourceData,
@@ -132,51 +146,49 @@ export async function POST(request: NextRequest) {
         fillBlankRatio,
         subjectiveType,
         project,
+        complexity: finalComplexity,
       });
 
       // 6. AI로 문제 생성
-    let completion;
-    try {
-      completion = await groq.chat.completions.create({
-        messages: [
-          {
-            role: "system",
-            content: systemPrompt,
-          },
-          {
-            role: "user",
-            content: userPrompt,
-          },
-        ],
-        model: DEFAULT_MODEL,
-        temperature: generationMode === "user_data" ? 0.7 : 0.9, // 다양성 증가 (중복 방지)
-        max_tokens: 16000,
-        response_format: { type: "json_object" },
-      });
-    } catch (groqError: unknown) {
-      // Groq API rate limit 에러 처리
-      if (
-        groqError &&
-        typeof groqError === "object" &&
-        "status" in groqError &&
-        groqError.status === 429
-      ) {
-        const errorMessage =
+      let completion;
+      try {
+        completion = await groq.chat.completions.create({
+          messages: [
+            {
+              role: "system",
+              content: systemPrompt,
+            },
+            {
+              role: "user",
+              content: userPrompt,
+            },
+          ],
+          model: DEFAULT_MODEL,
+          temperature: generationMode === "user_data" ? 0.7 : 0.9, // 다양성 증가 (중복 방지)
+          max_tokens: 16000,
+          response_format: { type: "json_object" },
+        });
+      } catch (groqError: unknown) {
+        // Groq API rate limit 에러 처리
+        if (
           groqError &&
           typeof groqError === "object" &&
-          "error" in groqError &&
-          typeof groqError.error === "object" &&
-          groqError.error !== null &&
-          "message" in groqError.error
-            ? String(groqError.error.message)
-            : "일일 토큰 한도를 초과했습니다. 잠시 후 다시 시도해주세요.";
-        return NextResponse.json(
-          { error: errorMessage },
-          { status: 429 }
-        );
+          "status" in groqError &&
+          groqError.status === 429
+        ) {
+          const errorMessage =
+            groqError &&
+            typeof groqError === "object" &&
+            "error" in groqError &&
+            typeof groqError.error === "object" &&
+            groqError.error !== null &&
+            "message" in groqError.error
+              ? String(groqError.error.message)
+              : "일일 토큰 한도를 초과했습니다. 잠시 후 다시 시도해주세요.";
+          return NextResponse.json({ error: errorMessage }, { status: 429 });
+        }
+        throw groqError;
       }
-      throw groqError;
-    }
 
       console.log("AI 응답 받음, 파싱 시작...");
 
@@ -220,6 +232,7 @@ export async function POST(request: NextRequest) {
         source_data: sourceData || null,
         fill_blank_ratio: fillBlankRatio,
         prompt_template: aiPrompt || null,
+        complexity: generationMode === "ai_only" ? complexity : null, // ai_only 모드일 때만 저장
       })
       .select()
       .single();

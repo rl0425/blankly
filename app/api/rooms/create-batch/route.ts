@@ -11,7 +11,10 @@ import {
   setCachedProblems,
   type AIProblem,
 } from "@/shared/lib/cache/problem-cache";
-import type { GenerationMode, GradingStrictness } from "@/shared/lib/prompts/ai-prompts";
+import type {
+  GenerationMode,
+  GradingStrictness,
+} from "@/shared/lib/prompts/ai-prompts";
 
 interface BatchRoomRequest {
   projectId: string;
@@ -102,11 +105,21 @@ export async function POST(request: NextRequest) {
         }
 
         // AI로 문제 생성 (한 번만 호출)
-        const generationMode: GenerationMode = (firstRoom.generationMode || "user_data") as GenerationMode;
-        const gradingStrictness: GradingStrictness = (firstRoom.gradingStrictness || "normal") as GradingStrictness;
-        const subjectiveType: "fill_blank" | "essay" | "both" = (firstRoom.subjectiveType || "both") as "fill_blank" | "essay" | "both";
+        const generationMode: GenerationMode = (firstRoom.generationMode ||
+          "user_data") as GenerationMode;
+        const gradingStrictness: GradingStrictness =
+          (firstRoom.gradingStrictness || "normal") as GradingStrictness;
+        const subjectiveType: "fill_blank" | "essay" | "both" =
+          (firstRoom.subjectiveType || "both") as
+            | "fill_blank"
+            | "essay"
+            | "both";
 
-        const systemPrompt = buildSystemPrompt(generationMode, gradingStrictness);
+        const systemPrompt = buildSystemPrompt(
+          generationMode,
+          gradingStrictness,
+          firstRoom.aiPrompt || undefined // aiPrompt를 topic으로 전달
+        );
         const userPrompt = buildUserPrompt({
           generationMode,
           sourceData: firstRoom.sourceData,
@@ -292,4 +305,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

@@ -25,6 +25,7 @@ interface CreateRoomModalProps {
 
 type GenerationMode = "user_data" | "hybrid" | "ai_only";
 type GradingStrictness = "strict" | "normal" | "lenient";
+type AIComplexity = "simple" | "advanced";
 
 export function CreateRoomModal({
   projectId,
@@ -61,6 +62,7 @@ export function CreateRoomModal({
   const [gradingStrictness, setGradingStrictness] =
     useState<GradingStrictness>("normal");
   const [aiPrompt, setAiPrompt] = useState("");
+  const [complexity, setComplexity] = useState<AIComplexity>("simple");
 
   const router = useRouter();
   const { toast } = useToast();
@@ -115,6 +117,10 @@ export function CreateRoomModal({
           setGradingStrictness(
             settings.grading_strictness as GradingStrictness
           );
+        // complexity 불러오기 (ai_only 모드일 때만)
+        if (settings.complexity && settings.generation_mode === "ai_only") {
+          setComplexity(settings.complexity as AIComplexity);
+        }
         // 이전 설정을 불러왔으므로 토스트 메시지 표시하지 않음
       } else {
         toast({
@@ -320,6 +326,7 @@ export function CreateRoomModal({
           fillBlankRatio,
           subjectiveType,
           gradingStrictness,
+          complexity: generationMode === "ai_only" ? complexity : undefined, // ai_only 모드일 때만 전송
         }),
       });
 
@@ -374,6 +381,7 @@ export function CreateRoomModal({
       setDifficulty("medium");
       setFillBlankRatio(60);
       setGradingStrictness("normal");
+      setComplexity("simple");
       setShowAdvanced(false);
       setTitleError("");
       setSourceDataError("");
@@ -851,31 +859,87 @@ export function CreateRoomModal({
 
                   {/* AI 프롬프트 (ai_only 모드) */}
                   {generationMode === "ai_only" && (
-                    <div className="space-y-2">
-                      <Label htmlFor="aiPrompt">
-                        AI 프롬프트 <span className="text-red-500">*</span>
-                      </Label>
-                      <textarea
-                        id="aiPrompt"
-                        value={aiPrompt}
-                        onChange={(e) => {
-                          setAiPrompt(e.target.value);
-                          if (aiPromptError) setAiPromptError("");
-                        }}
-                        placeholder="AI 프롬프트를 입력하세요... (최소 10자)&#10;&#10;예시:&#10;- 토익 RC Part 5 문법 문제&#10;- 비즈니스 영어 위주&#10;- 동사 시제 관련 문제 많이"
-                        className={`flex w-full rounded-xl border ${
-                          aiPromptError ? "border-red-500" : "border-input"
-                        } bg-background px-4 py-3 text-sm min-h-[120px] resize-y`}
-                        disabled={isLoading || isLoadingSettings}
-                      />
-                      {aiPromptError && (
-                        <p className="text-sm text-red-500">{aiPromptError}</p>
-                      )}
-                      <p className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Lightbulb className="h-3 w-3" />
-                        AI가 문제를 생성할 때 사용할 프롬프트를 입력하세요
-                      </p>
-                    </div>
+                    <>
+                      {/* 문제 스타일 선택 */}
+                      <div className="space-y-3">
+                        <Label>문제 스타일</Label>
+                        <div className="space-y-2">
+                          <label
+                            className={`flex items-center gap-3 p-4 border rounded-xl cursor-pointer transition-all ${
+                              complexity === "simple"
+                                ? "border-primary bg-primary/5 shadow-sm"
+                                : "border-input hover:border-primary/50"
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="complexity"
+                              checked={complexity === "simple"}
+                              onChange={() => setComplexity("simple")}
+                              className="w-4 h-4"
+                              disabled={isLoading || isLoadingSettings}
+                            />
+                            <div className="flex-1">
+                              <p className="font-medium">기본 학습</p>
+                              <p className="text-sm text-muted-foreground">
+                                핵심 개념 이해 및 확인 문제
+                              </p>
+                            </div>
+                          </label>
+
+                          <label
+                            className={`flex items-center gap-3 p-4 border rounded-xl cursor-pointer transition-all ${
+                              complexity === "advanced"
+                                ? "border-primary bg-primary/5 shadow-sm"
+                                : "border-input hover:border-primary/50"
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="complexity"
+                              checked={complexity === "advanced"}
+                              onChange={() => setComplexity("advanced")}
+                              className="w-4 h-4"
+                              disabled={isLoading || isLoadingSettings}
+                            />
+                            <div className="flex-1">
+                              <p className="font-medium">실전 모의고사</p>
+                              <p className="text-sm text-muted-foreground">
+                                복잡한 사례 기반 문제 (시험 대비)
+                              </p>
+                            </div>
+                          </label>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="aiPrompt">
+                          AI 프롬프트 <span className="text-red-500">*</span>
+                        </Label>
+                        <textarea
+                          id="aiPrompt"
+                          value={aiPrompt}
+                          onChange={(e) => {
+                            setAiPrompt(e.target.value);
+                            if (aiPromptError) setAiPromptError("");
+                          }}
+                          placeholder="AI 프롬프트를 입력하세요... (최소 10자)&#10;&#10;예시:&#10;- 토익 RC Part 5 문법 문제&#10;- 비즈니스 영어 위주&#10;- 동사 시제 관련 문제 많이"
+                          className={`flex w-full rounded-xl border ${
+                            aiPromptError ? "border-red-500" : "border-input"
+                          } bg-background px-4 py-3 text-sm min-h-[120px] resize-y`}
+                          disabled={isLoading || isLoadingSettings}
+                        />
+                        {aiPromptError && (
+                          <p className="text-sm text-red-500">
+                            {aiPromptError}
+                          </p>
+                        )}
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Lightbulb className="h-3 w-3" />
+                          AI가 문제를 생성할 때 사용할 프롬프트를 입력하세요
+                        </p>
+                      </div>
+                    </>
                   )}
                 </form>
               </div>
@@ -905,7 +969,7 @@ export function CreateRoomModal({
 
               {/* 설정 불러오기 로딩 오버레이 */}
               {isLoadingSettings && (
-                <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-[100] rounded-t-2xl md:rounded-2xl">
+                <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-100 rounded-t-2xl md:rounded-2xl">
                   <div className="flex flex-col items-center gap-4 p-8 bg-card rounded-xl shadow-lg">
                     <div className="relative w-12 h-12">
                       <div className="absolute inset-0 border-4 border-primary/20 rounded-full"></div>
@@ -922,7 +986,7 @@ export function CreateRoomModal({
 
               {/* 문제 생성 로딩 오버레이 */}
               {isLoading && (
-                <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-[100] rounded-t-2xl md:rounded-2xl">
+                <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-100 rounded-t-2xl md:rounded-2xl">
                   <div className="flex flex-col items-center gap-4 p-8 bg-card rounded-xl shadow-lg">
                     <div className="relative w-16 h-16">
                       <div className="absolute inset-0 border-4 border-primary/20 rounded-full"></div>
