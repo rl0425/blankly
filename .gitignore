@@ -53,7 +53,7 @@ Thumbs.db
 
 # Cursor AI
 .cursor/
-.cursorrules
+.cursorrules 
 
 # Temporary files
 tmp/
