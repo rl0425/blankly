@@ -33,6 +33,16 @@ export function CreateProjectModal({
     role: "",
   });
 
+  const resetForm = () => {
+    setFormData({
+      title: "",
+      category: "영어",
+      description: "",
+      basePrompt: "",
+      role: "",
+    });
+  };
+
   // 편집 모드일 때 초기 데이터 설정
   useEffect(() => {
     if (editMode && initialData) {
@@ -80,6 +90,26 @@ export function CreateProjectModal({
   const router = useRouter();
   const { toast } = useToast();
   const supabase = createClient();
+
+  const handleOpenChange = (isOpen: boolean) => {
+    setOpen(isOpen);
+
+    // 닫힐 때 상태 정리(다음 오픈에서 "계속 비활성" 같은 상태 꼬임 방지)
+    if (!isOpen) {
+      setLoading(false);
+      if (!editMode) {
+        resetForm();
+      }
+      if (onClose) {
+        onClose();
+      }
+    }
+  };
+
+  const handleOpen = () => {
+    setLoading(false);
+    setOpen(true);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -171,18 +201,7 @@ export function CreateProjectModal({
         });
       }
 
-      setOpen(false);
-      setFormData({
-        title: "",
-        category: "영어",
-        description: "",
-        basePrompt: "",
-        role: "",
-      });
-
-      if (onClose) {
-        onClose();
-      }
+      handleOpenChange(false);
 
       // 프로젝트 리스트를 다시 불러오기
       router.refresh();
@@ -199,13 +218,6 @@ export function CreateProjectModal({
       });
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleOpenChange = (isOpen: boolean) => {
-    setOpen(isOpen);
-    if (!isOpen && onClose) {
-      onClose();
     }
   };
 
@@ -314,9 +326,13 @@ export function CreateProjectModal({
                     id="description"
                     value={formData.description}
                     onChange={(e) =>
-                      setFormData({ ...formData, description: e.target.value })
+                      setFormData({
+                        ...formData,
+                        description: e.target.value.slice(0, 100),
+                      })
                     }
                     placeholder="예: 토익 시험 대비 문법 학습"
+                    maxLength={100}
                     disabled={loading}
                   />
                 </div>
@@ -389,6 +405,11 @@ export function CreateProjectModal({
                 className="flex-1"
                 form="project-form"
               >
+                {loading && (
+                  <span className="mr-2 inline-flex items-center">
+                    <span className="h-4 w-4 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
+                  </span>
+                )}
                 {loading
                   ? editMode
                     ? "수정 중..."
@@ -398,6 +419,28 @@ export function CreateProjectModal({
                   : "프로젝트 생성"}
               </Button>
             </div>
+
+            {/* 로딩 오버레이 (CreateRoomModal과 동일한 UX) */}
+            {loading && (
+              <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-100 rounded-t-2xl md:rounded-2xl">
+                <div className="flex flex-col items-center gap-4 p-8 bg-card rounded-xl shadow-lg">
+                  <div className="relative w-16 h-16">
+                    <div className="absolute inset-0 border-4 border-primary/20 rounded-full"></div>
+                    <div className="absolute inset-0 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+                  </div>
+                  <div className="text-center space-y-2">
+                    <p className="text-lg font-semibold">
+                      {editMode
+                        ? "프로젝트를 수정하고 있습니다..."
+                        : "프로젝트를 생성하고 있습니다..."}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      잠시만 기다려주세요
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
           </motion.div>
         </motion.div>
       )}
@@ -407,7 +450,7 @@ export function CreateProjectModal({
   return (
     <>
       {!editMode && (
-        <Button size="sm" onClick={() => setOpen(true)}>
+        <Button size="sm" onClick={handleOpen} disabled={loading}>
           <Plus className="h-4 w-4 mr-2" />새 프로젝트
         </Button>
       )}

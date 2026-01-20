@@ -115,9 +115,25 @@ export async function submitAnswer(
       const metadata = problem.metadata as { alternatives?: string[] } | null;
       const alternatives = metadata?.alternatives || [];
 
+      // 복수 정답 처리: "/" 구분자가 있으면 분리
+      const correctAnswers = problem.correct_answer
+        .split("/")
+        .map((ans: string) => ans.trim())
+        .filter((ans: string) => ans.length > 0);
+      
+      // 첫 번째 정답을 메인 정답으로 사용 (AI 채점용)
+      const mainCorrectAnswer = correctAnswers[0] || problem.correct_answer;
+      const hasMultipleAnswers = correctAnswers.length > 1;
+
+      console.log("복수 정답 처리:", {
+        original: problem.correct_answer,
+        split: correctAnswers,
+        hasMultiple: hasMultipleAnswers,
+      });
+
       // 스마트 엄격도 조정: 정답 길이에 따라 자동 조정
-      const correctAnswerLength = problem.correct_answer.trim().length;
-      const wordCount = problem.correct_answer.trim().split(/\s+/).length;
+      const correctAnswerLength = mainCorrectAnswer.trim().length;
+      const wordCount = mainCorrectAnswer.trim().split(/\s+/).length;
       
       let smartStrictness = gradingStrictness;
       
@@ -137,6 +153,11 @@ export async function submitAnswer(
         console.log("📄 서술형 문제 → 보통 이상 적용:", smartStrictness);
       }
 
+      // 복수 정답을 alternatives에 추가 (AI 채점 시 모든 정답 확인)
+      const allAlternatives = hasMultipleAnswers
+        ? [...alternatives, ...correctAnswers.slice(1)]
+        : alternatives;
+
       const gradeResponse = await fetch(
         `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/ai/grade`,
         {
@@ -144,9 +165,9 @@ export async function submitAnswer(
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             question: problem.question,
-            correctAnswer: problem.correct_answer,
+            correctAnswer: problem.correct_answer, // 원본 전체 전달 (AI가 "/" 구분 처리)
             userAnswer,
-            alternatives,
+            alternatives: allAlternatives,
             gradingStrictness: smartStrictness, // 스마트 조정된 엄격도
           }),
         }
@@ -157,49 +178,78 @@ export async function submitAnswer(
         isCorrect = gradeResult.is_correct;
         aiFeedback = gradeResult;
       } else {
-        // AI 채점 실패 시 alternatives와 비교
+        // AI 채점 실패 시 fallback: 복수 정답 모두 확인
         const normalizedUserAnswer = userAnswer.trim().toLowerCase().replace(/\s+/g, '');
-        const normalizedCorrectAnswer = problem.correct_answer.trim().toLowerCase().replace(/\s+/g, '');
-        const normalizedAlternatives = alternatives.map((alt: string) => 
+        const normalizedCorrectAnswers = correctAnswers.map((ans: string) =>
+          ans.trim().toLowerCase().replace(/\s+/g, '')
+        );
+        const normalizedAlternatives = allAlternatives.map((alt: string) => 
           alt.trim().toLowerCase().replace(/\s+/g, '')
+        );
+        
+        // 복수 정답 중 하나라도 일치하면 정답
+        const matchesAnyCorrectAnswer = normalizedCorrectAnswers.some((correctAns: string) =>
+          normalizedUserAnswer === correctAns
         );
         
         // 엄격 모드: 정답 또는 alternatives와 정확히 일치하는지만 확인
         if (smartStrictness === "strict") {
-          isCorrect = normalizedUserAnswer === normalizedCorrectAnswer ||
+          isCorrect = matchesAnyCorrectAnswer ||
                       normalizedAlternatives.includes(normalizedUserAnswer);
           console.log("엄격 모드 fallback:", isCorrect);
         } else {
           // 보통/느슨 모드: 포함 여부도 확인
-          isCorrect = normalizedUserAnswer === normalizedCorrectAnswer ||
+          const containsAnyCorrectAnswer = normalizedCorrectAnswers.some((correctAns: string) =>
+            normalizedUserAnswer.includes(correctAns) || correctAns.includes(normalizedUserAnswer)
+          );
+          isCorrect = matchesAnyCorrectAnswer ||
                       normalizedAlternatives.includes(normalizedUserAnswer) ||
-                      normalizedCorrectAnswer.includes(normalizedUserAnswer);
+                      containsAnyCorrectAnswer;
           console.log("일반 모드 fallback:", isCorrect);
         }
       }
     } catch (error) {
       console.error("AI grading error:", error);
-      // AI 채점 실패 시 alternatives와 비교
+      // AI 채점 실패 시 alternatives와 비교 (복수 정답 처리)
       const metadata = problem.metadata as { alternatives?: string[] } | null;
       const alternatives = metadata?.alternatives || [];
+      
+      // 복수 정답 처리: "/" 구분자가 있으면 분리
+      const correctAnswers = problem.correct_answer
+        .split("/")
+        .map((ans: string) => ans.trim())
+        .filter((ans: string) => ans.length > 0);
+      
       const normalizedUserAnswer = userAnswer.trim().toLowerCase().replace(/\s+/g, '');
-      const normalizedCorrectAnswer = problem.correct_answer.trim().toLowerCase().replace(/\s+/g, '');
+      const normalizedCorrectAnswers = correctAnswers.map((ans: string) =>
+        ans.trim().toLowerCase().replace(/\s+/g, '')
+      );
       const normalizedAlternatives = alternatives.map((alt: string) => 
         alt.trim().toLowerCase().replace(/\s+/g, '')
       );
       
+      // 복수 정답 중 하나라도 일치하면 정답
+      const matchesAnyCorrectAnswer = normalizedCorrectAnswers.some((correctAns: string) =>
+        normalizedUserAnswer === correctAns
+      );
+      
       // 엄격 모드 판별 (catch 블록에서도 동일 로직)
-      const correctAnswerLength = problem.correct_answer.trim().length;
-      const wordCount = problem.correct_answer.trim().split(/\s+/).length;
+      const mainCorrectAnswer = correctAnswers[0] || problem.correct_answer;
+      const correctAnswerLength = mainCorrectAnswer.trim().length;
+      const wordCount = mainCorrectAnswer.trim().split(/\s+/).length;
       const isStrictMode = correctAnswerLength <= 10 || wordCount <= 2;
       
       if (isStrictMode) {
-        isCorrect = normalizedUserAnswer === normalizedCorrectAnswer ||
+        isCorrect = matchesAnyCorrectAnswer ||
                     normalizedAlternatives.includes(normalizedUserAnswer);
       } else {
-        isCorrect = normalizedUserAnswer === normalizedCorrectAnswer ||
+        // 보통/느슨 모드: 포함 여부도 확인
+        const containsAnyCorrectAnswer = normalizedCorrectAnswers.some((correctAns: string) =>
+          normalizedUserAnswer.includes(correctAns) || correctAns.includes(normalizedUserAnswer)
+        );
+        isCorrect = matchesAnyCorrectAnswer ||
                     normalizedAlternatives.includes(normalizedUserAnswer) ||
-                    normalizedCorrectAnswer.includes(normalizedUserAnswer);
+                    containsAnyCorrectAnswer;
       }
     }
   }
@@ -341,8 +391,7 @@ export async function completeRoomSession(roomId: string) {
 
 export async function markProblemAsCorrect(
   problemId: string,
-  roomId: string,
-  userAnswer: string
+  roomId: string
 ) {
   const supabase = await createClient();
   
