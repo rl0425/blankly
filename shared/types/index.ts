@@ -31,6 +31,7 @@ export interface Project {
   total_rooms: number;
   completed_rooms: number;
   is_active: boolean;
+  sort_order?: number; // 프로젝트 표시 순서 (높을수록 앞에 표시)
   created_at: string;
   updated_at: string;
 }

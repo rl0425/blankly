@@ -6,8 +6,14 @@ import { z } from "zod";
 import type { ProjectCategory, SourceType } from "@/shared/types";
 
 const CreateProjectSchema = z.object({
-  title: z.string().min(1, "제목을 입력하세요"),
-  description: z.string().optional(),
+  title: z
+    .string()
+    .min(1, "제목을 입력하세요")
+    .max(50, "제목은 50자 이하여야 합니다"),
+  description: z
+    .string()
+    .min(10, "설명은 최소 10자 이상 입력하세요")
+    .max(100, "설명은 100자 이하여야 합니다"),
   category: z.enum(["영어", "코딩", "자격증", "기타"]),
   source_type: z.enum(["prompt", "data_upload"]),
   source_data: z.record(z.unknown()).optional(),
@@ -35,11 +41,24 @@ export async function createProject(formData: FormData) {
       return { error: "로그인이 필요합니다" };
     }
 
+    // 새로운 프로젝트의 sort_order 계산 (가장 높은 값 + 10)
+    const { data: existingProjects } = await supabase
+      .from("projects")
+      .select("sort_order")
+      .eq("user_id", user.id)
+      .order("sort_order", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const maxSortOrder = existingProjects?.sort_order || 0;
+    const newSortOrder = maxSortOrder + 10;
+
     const { data, error } = await supabase
       .from("projects")
       .insert({
         ...validatedData,
         user_id: user.id,
+        sort_order: newSortOrder, // 새 프로젝트는 가장 앞에 표시
       })
       .select()
       .single();
@@ -76,6 +95,7 @@ export async function getProjects() {
     .eq("user_id", user.id)
     .eq("is_active", true)
     .is("deleted_at", null)
+    .order("sort_order", { ascending: false }) // sort_order 우선, 같으면 created_at
     .order("created_at", { ascending: false });
 
   if (error) {

@@ -1,8 +1,24 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+  DragStartEvent,
+  DragOverlay,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  rectSortingStrategy,
+} from "@dnd-kit/sortable";
 import {
   Card,
   CardContent,
@@ -11,21 +27,44 @@ import {
   CardTitle,
 } from "@/shared/ui/components/card";
 import { Button } from "@/shared/ui/components/button";
-import { Plus, Edit, Trash2, Pencil } from "lucide-react";
+import { Plus, Edit, Trash2, GripVertical } from "lucide-react";
 import { CreateProjectModal } from "./CreateProjectModal";
+import { SortableProjectCard } from "./SortableProjectCard";
+import { useToast } from "@/shared/hooks/use-toast";
 import type { Project } from "@/shared/types";
 
 interface ProjectListProps {
   projects: Project[];
+  isEditMode?: boolean;
+  onEditModeChange?: (isEditMode: boolean) => void;
 }
 
-export function ProjectList({ projects }: ProjectListProps) {
+export function ProjectList({
+  projects,
+  isEditMode: externalEditMode,
+  onEditModeChange,
+}: ProjectListProps) {
   const router = useRouter();
-  const [isEditMode, setIsEditMode] = useState(false);
+  const { toast } = useToast();
+  const [internalEditMode, setInternalEditMode] = useState(false);
+  
+  // 외부에서 제어 가능하도록 (props로 전달되면 사용, 없으면 내부 state 사용)
+  const isEditMode = externalEditMode !== undefined ? externalEditMode : internalEditMode;
+  const setIsEditMode = onEditModeChange || setInternalEditMode;
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [deletingProjectId, setDeletingProjectId] = useState<string | null>(
     null
   );
+  const [isReordering, setIsReordering] = useState(false);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  
+  // 편집 모드에서 사용할 프로젝트 목록 (원본 순서 유지)
+  const [orderedProjects, setOrderedProjects] = useState<Project[]>(projects);
+
+  // 프로젝트 목록이 변경되면 orderedProjects도 업데이트
+  useEffect(() => {
+    setOrderedProjects(projects);
+  }, [projects]);
 
   const handleDelete = async (projectId: string) => {
     if (
@@ -57,6 +96,83 @@ export function ProjectList({ projects }: ProjectListProps) {
     }
   };
 
+  // 드래그 시작 핸들러
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as string);
+  };
+
+  // 드래그 앤 드롭 핸들러
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    setActiveId(null);
+
+    if (!over || active.id === over.id) {
+      return;
+    }
+
+    const oldIndex = orderedProjects.findIndex((p) => p.id === active.id);
+    const newIndex = orderedProjects.findIndex((p) => p.id === over.id);
+
+    if (oldIndex === -1 || newIndex === -1) {
+      return;
+    }
+
+    const newProjects = arrayMove(orderedProjects, oldIndex, newIndex);
+    setOrderedProjects(newProjects);
+
+    // DB에 순서 업데이트
+    updateProjectOrder(newProjects);
+  };
+
+  // 드래그 센서 설정 (터치 지원)
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8, // 8px 이동해야 드래그 시작 (실수로 클릭하는 것 방지)
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  // 프로젝트 순서 업데이트 API 호출
+  const updateProjectOrder = async (projectsToOrder: Project[]) => {
+    setIsReordering(true);
+    try {
+      // 각 프로젝트에 새로운 sort_order 할당 (맨 위가 가장 높은 값)
+      const projectOrders = projectsToOrder.map((project, index) => ({
+        id: project.id,
+        sort_order: (projectsToOrder.length - index) * 10, // 10, 20, 30... 형태로 할당
+      }));
+
+      const response = await fetch("/api/projects/reorder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectOrders }),
+      });
+
+      if (!response.ok) {
+        throw new Error("순서 변경에 실패했습니다");
+      }
+
+      router.refresh();
+    } catch (error) {
+      console.error("Reorder projects error:", error);
+      toast({
+        title: "순서 변경 실패",
+        description:
+          error instanceof Error ? error.message : "다시 시도해주세요",
+        variant: "destructive",
+      });
+      // 실패 시 원래 순서로 복구
+      setOrderedProjects(projects);
+    } finally {
+      setIsReordering(false);
+    }
+  };
+
   if (projects.length === 0) {
     return (
       <Card>
@@ -80,121 +196,56 @@ export function ProjectList({ projects }: ProjectListProps) {
 
   return (
     <>
-      {/* 편집 모드 토글 버튼 */}
-      <div className="flex items-center justify-end mb-4">
-        <Button
-          variant={isEditMode ? "default" : "outline"}
-          size="sm"
-          onClick={() => setIsEditMode(!isEditMode)}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+      >
+        <SortableContext
+          items={orderedProjects.map((p) => p.id)}
+          strategy={rectSortingStrategy}
         >
-          <Pencil className="h-4 w-4 mr-2" />
-          {isEditMode ? "편집 완료" : "편집하기"}
-        </Button>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {projects.map((project) => (
-          <Card
-            key={project.id}
-            className="hover:shadow-lg transition-all h-full relative"
-          >
-            {!isEditMode ? (
-              <Link href={`/study/${project.id}`} className="block">
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <CardTitle className="line-clamp-2">
-                      {project.title}
-                    </CardTitle>
-                    <span className="text-xs px-2 py-1 rounded-full bg-primary/10 text-primary">
-                      {project.category}
-                    </span>
-                  </div>
-                  {project.description && (
-                    <CardDescription className="line-clamp-2">
-                      {project.description}
-                    </CardDescription>
-                  )}
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">
-                      진행률:{" "}
-                      {project.total_rooms > 0
-                        ? Math.round(
-                            (project.completed_rooms / project.total_rooms) *
-                              100
-                          )
-                        : 0}
-                      %
-                    </span>
-                    <span className="text-primary font-medium">
-                      {project.completed_rooms}/{project.total_rooms} Day
-                    </span>
-                  </div>
-                </CardContent>
-              </Link>
-            ) : (
-              <>
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <CardTitle className="line-clamp-2">
-                      {project.title}
-                    </CardTitle>
-                    <span className="text-xs px-2 py-1 rounded-full bg-primary/10 text-primary">
-                      {project.category}
-                    </span>
-                  </div>
-                  {project.description && (
-                    <CardDescription className="line-clamp-2">
-                      {project.description}
-                    </CardDescription>
-                  )}
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center justify-between text-sm mb-4">
-                    <span className="text-muted-foreground">
-                      진행률:{" "}
-                      {project.total_rooms > 0
-                        ? Math.round(
-                            (project.completed_rooms / project.total_rooms) *
-                              100
-                          )
-                        : 0}
-                      %
-                    </span>
-                    <span className="text-primary font-medium">
-                      {project.completed_rooms}/{project.total_rooms} Day
-                    </span>
-                  </div>
-
-                  {/* 편집 모드 버튼들 */}
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => setEditingProject(project)}
-                    >
-                      <Edit className="h-3 w-3 mr-1" />
-                      수정
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => handleDelete(project.id)}
-                      disabled={deletingProjectId === project.id}
-                    >
-                      <Trash2 className="h-3 w-3 mr-1" />
-                      {deletingProjectId === project.id ? "삭제 중..." : "삭제"}
-                    </Button>
-                  </div>
-                </CardContent>
-              </>
-            )}
-          </Card>
-        ))}
-      </div>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {orderedProjects.map((project, index) => (
+              <SortableProjectCard
+                key={project.id}
+                project={project}
+                index={index}
+                isEditMode={isEditMode}
+                isDeleting={deletingProjectId === project.id}
+                isReordering={isReordering}
+                isDragging={activeId === project.id}
+                onEdit={setEditingProject}
+                onDelete={handleDelete}
+              />
+            ))}
+          </div>
+        </SortableContext>
+        <DragOverlay>
+          {activeId ? (
+            (() => {
+              const draggedProject = orderedProjects.find(
+                (p) => p.id === activeId
+              );
+              return draggedProject ? (
+                <div className="opacity-90">
+                  <SortableProjectCard
+                    project={draggedProject}
+                    index={0}
+                    isEditMode={isEditMode}
+                    isDeleting={false}
+                    isReordering={false}
+                    isDragging={true}
+                    onEdit={() => {}}
+                    onDelete={() => {}}
+                  />
+                </div>
+              ) : null;
+            })()
+          ) : null}
+        </DragOverlay>
+      </DndContext>
 
       {/* 수정 모달 */}
       {editingProject && (
@@ -203,6 +254,19 @@ export function ProjectList({ projects }: ProjectListProps) {
           initialData={editingProject}
           onClose={() => setEditingProject(null)}
         />
+      )}
+
+      {/* 재정렬 중 로딩 오버레이 */}
+      {isReordering && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="flex flex-col items-center gap-4">
+            <div className="relative w-16 h-16">
+              <div className="absolute inset-0 border-4 border-primary/20 rounded-full"></div>
+              <div className="absolute inset-0 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+            </div>
+            <p className="text-lg font-medium">순서 변경 중...</p>
+          </div>
+        </div>
       )}
     </>
   );

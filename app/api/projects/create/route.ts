@@ -28,6 +28,18 @@ export async function POST(request: NextRequest) {
     const source_data = formData.get("source_data");
     const description = formData.get("description") as string;
 
+    // 새로운 프로젝트의 sort_order 계산 (가장 높은 값 + 10)
+    const { data: existingProjects } = await supabase
+      .from("projects")
+      .select("sort_order")
+      .eq("user_id", user.id)
+      .order("sort_order", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const maxSortOrder = existingProjects?.sort_order || 0;
+    const newSortOrder = maxSortOrder + 10;
+
     const { data, error } = await supabase
       .from("projects")
       .insert({
@@ -37,6 +49,7 @@ export async function POST(request: NextRequest) {
         category,
         source_type,
         source_data: source_data ? JSON.parse(source_data as string) : null,
+        sort_order: newSortOrder, // 새 프로젝트는 가장 앞에 표시
       })
       .select()
       .single();

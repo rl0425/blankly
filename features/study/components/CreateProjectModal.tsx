@@ -84,6 +84,29 @@ export function CreateProjectModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Validation 체크
+    if (!formData.title || formData.title.length > 50) {
+      toast({
+        title: "제목 오류",
+        description: "제목은 1자 이상 50자 이하여야 합니다.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (
+      !formData.description ||
+      formData.description.length < 10 ||
+      formData.description.length > 100
+    ) {
+      toast({
+        title: "설명 오류",
+        description: "설명은 10자 이상 100자 이하여야 합니다.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     // 로그인 체크
     const {
       data: { user },
@@ -246,14 +269,20 @@ export function CreateProjectModal({
                 <div className="space-y-2">
                   <Label htmlFor="title">
                     프로젝트 제목 <span className="text-red-500">*</span>
+                    <span className="text-xs text-muted-foreground ml-2">
+                      ({formData.title.length}/50자)
+                    </span>
                   </Label>
                   <Input
                     id="title"
                     value={formData.title}
-                    onChange={(e) =>
-                      setFormData({ ...formData, title: e.target.value })
-                    }
+                    onChange={(e) => {
+                      if (e.target.value.length <= 50) {
+                        setFormData({ ...formData, title: e.target.value });
+                      }
+                    }}
                     placeholder="예: 토익 RC 정복하기"
+                    maxLength={50}
                     required
                     disabled={loading}
                   />
@@ -350,6 +379,10 @@ export function CreateProjectModal({
                 disabled={
                   loading ||
                   !formData.title ||
+                  formData.title.length > 50 ||
+                  !formData.description ||
+                  formData.description.length < 10 ||
+                  formData.description.length > 100 ||
                   !formData.role ||
                   !formData.basePrompt
                 }
