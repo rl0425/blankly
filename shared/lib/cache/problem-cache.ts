@@ -23,6 +23,7 @@ interface CacheKeyParams {
   gradingStrictness: string;
   generationMode: string;
   complexity?: string; // "simple" | "advanced"
+  seed?: string | number; // 랜덤 시드 (선택적)
 }
 
 /**
@@ -39,9 +40,11 @@ export function generateCacheKey(params: CacheKeyParams): string {
     gradingStrictness,
     generationMode,
     complexity,
+    seed,
   } = params;
 
   // 캐시 키에 포함할 데이터
+  // 시드가 있으면 캐시 키에 포함하여 다른 버전 생성 가능
   const cacheData = JSON.stringify({
     sourceData: sourceData?.trim() || "",
     aiPrompt: aiPrompt?.trim() || "",
@@ -52,6 +55,7 @@ export function generateCacheKey(params: CacheKeyParams): string {
     gradingStrictness,
     generationMode,
     complexity: complexity || "simple", // 기본값: simple
+    seed: seed || undefined, // 시드가 있으면 포함
   });
 
   // SHA-256 해시 생성

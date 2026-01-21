@@ -27,6 +27,8 @@ export async function POST(request: NextRequest) {
       subjectiveType = "both", // 'fill_blank' | 'essay' | 'both'
       gradingStrictness = "normal",
       complexity = "simple", // 'simple' | 'advanced'
+      useCache = true, // 캐시 사용 여부 (기본값: true)
+      seed, // 랜덤 시드 (선택적, 제공 시 캐시 키에 포함)
     } = body;
 
     if (!projectId || !title) {
@@ -107,6 +109,7 @@ export async function POST(request: NextRequest) {
     const dayNumber = (count || 0) + 1;
 
     // 4. 캐시 키 생성 및 캐시 확인
+    // 시드가 제공되면 캐시 키에 포함하여 다른 버전 생성 가능
     const cacheKey = generateCacheKey({
       sourceData,
       aiPrompt,
@@ -117,9 +120,20 @@ export async function POST(request: NextRequest) {
       gradingStrictness,
       generationMode,
       complexity: generationMode === "ai_only" ? complexity : undefined, // ai_only 모드일 때만 complexity 사용
+      seed: seed || undefined, // 시드가 있으면 캐시 키에 포함
     });
 
-    let problems: AIProblem[] | null = await getCachedProblems(cacheKey);
+    let problems: AIProblem[] | null = null;
+
+    // useCache가 false이면 캐시 무시하고 강제 재생성
+    if (useCache) {
+      problems = await getCachedProblems(cacheKey);
+      if (problems) {
+        console.log("✅ 캐시에서 문제 로드:", cacheKey);
+      }
+    } else {
+      console.log("🔄 캐시 무시, 새 문제 생성:", cacheKey);
+    }
 
     // 캐시 미스 시 AI 호출
     if (!problems) {
@@ -164,7 +178,16 @@ export async function POST(request: NextRequest) {
             },
           ],
           model: DEFAULT_MODEL,
-          temperature: generationMode === "user_data" ? 0.7 : 0.9, // 다양성 증가 (중복 방지)
+          // 시드가 제공되면 temperature를 약간 높여서 다양성 증가
+          // 같은 시드라도 temperature가 다르면 다른 결과 생성
+          temperature: seed
+            ? generationMode === "user_data"
+              ? 0.8
+              : 0.95
+            : generationMode === "user_data"
+            ? 0.7
+            : 0.9, // 다양성 증가 (중복 방지)
+          ...(seed && { seed: parseInt(String(seed).slice(-6), 10) % 1000000 }), // 시드가 있으면 사용 (6자리로 제한)
           max_tokens: 16000,
           response_format: { type: "json_object" },
         });
@@ -210,11 +233,13 @@ export async function POST(request: NextRequest) {
 
       problems = generatedProblems;
 
-      // 캐시 저장
-      await setCachedProblems(cacheKey, problems);
-      console.log("✅ 문제 캐시 저장 완료:", cacheKey);
-    } else {
-      console.log("✅ 캐시에서 문제 로드:", cacheKey);
+      // 캐시 저장 (useCache가 true일 때만)
+      if (useCache) {
+        await setCachedProblems(cacheKey, problems);
+        console.log("✅ 문제 캐시 저장 완료:", cacheKey);
+      } else {
+        console.log("⏭️ 캐시 무시 옵션이므로 캐시에 저장하지 않음");
+      }
     }
 
     // 7. 방 생성

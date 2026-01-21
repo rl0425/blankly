@@ -327,6 +327,9 @@ export function CreateRoomModal({
           subjectiveType,
           gradingStrictness,
           complexity: generationMode === "ai_only" ? complexity : undefined, // ai_only 모드일 때만 전송
+          useCache: true, // 캐시는 사용하되, 시드로 다른 문제 생성
+          // 매번 다른 문제 생성을 위해 타임스탬프 기반 시드 자동 생성
+          seed: Date.now().toString(),
         }),
       });
 
@@ -500,7 +503,7 @@ export function CreateRoomModal({
                   </div>
 
                   {/* 문제 수 & 난이도 */}
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="problemCount">
                         문제 수 <span className="text-red-500">*</span>
@@ -511,7 +514,7 @@ export function CreateRoomModal({
                         onChange={(e) =>
                           setProblemCount(Number(e.target.value))
                         }
-                        className="flex h-11 w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm"
+                        className="flex h-11 w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm appearance-none"
                         disabled={isLoading || isLoadingSettings}
                       >
                         <option value={5}>5개</option>
@@ -534,7 +537,7 @@ export function CreateRoomModal({
                             e.target.value as "easy" | "medium" | "hard"
                           )
                         }
-                        className="flex h-11 w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm"
+                        className="flex h-11 w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm appearance-none"
                         disabled={isLoading || isLoadingSettings}
                       >
                         <option value="easy">쉬움</option>
