@@ -3,7 +3,7 @@ import { Difficulty, ProblemType } from '@/shared/types';
 export function getAnalyzeContentPrompt(
   content: string,
   difficulty: Difficulty = 'medium',
-  problemType: ProblemType = 'fill_blank'
+  _problemType: ProblemType = 'fill_blank'
 ) {
   return `당신은 교육 콘텐츠 전문가입니다. 
 사용자가 제공한 학습 자료를 분석하고, 효과적인 빈칸 채우기 문제를 만드세요.
@@ -119,6 +119,13 @@ ${strictnessInstructions[strictness]}
 문제: ${question}
 정답: ${correctAnswer}${alternativesText}
 학생 답안: ${userAnswer}
+
+### [의미 없는 답변 처리]
+다음과 같은 답변은 **무조건 오답** 처리:
+- 단일 특수문자만 입력 (?, !, -, _, 등)
+- "모름", "모르겠음", "몰라" 등
+- 빈 문자열 또는 공백만 입력
+- 문제와 전혀 관련 없는 랜덤 문자열
 
 ### [채점 프로세스]
 

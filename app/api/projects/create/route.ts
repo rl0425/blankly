@@ -26,7 +26,9 @@ export async function POST(request: NextRequest) {
     }
 
     const source_data = formData.get("source_data");
-    const description = formData.get("description") as string;
+    const descriptionRaw = formData.get("description") as string;
+    // 빈 문자열을 null로 변환 (DB 제약 조건 준수)
+    const description = descriptionRaw?.trim() || null;
 
     // 새로운 프로젝트의 sort_order 계산 (가장 높은 값 + 10)
     const { data: existingProjects } = await supabase

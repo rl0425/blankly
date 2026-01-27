@@ -32,9 +32,9 @@ export function parseCodeInText(text: string): React.ReactNode {
     parts.push(
       <pre
         key={`block-${idx}`}
-        className="mt-2 mb-2 p-3 bg-muted rounded-lg overflow-x-auto text-sm font-mono border"
+        className="mt-2 mb-2 p-3 bg-muted rounded-lg overflow-x-auto text-sm font-mono border max-w-full"
       >
-        <code>{block.code}</code>
+        <code className="break-words whitespace-pre-wrap">{block.code}</code>
       </pre>
     );
     
@@ -67,7 +67,7 @@ function parseInlineCode(text: string, keyPrefix: string): React.ReactNode[] {
     parts.push(
       <code
         key={`${keyPrefix}-inline-${idx}`}
-        className="px-1.5 py-0.5 bg-muted rounded text-sm font-mono border"
+        className="px-1.5 py-0.5 bg-muted rounded text-sm font-mono border break-words"
       >
         {match[1]}
       </code>

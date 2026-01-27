@@ -12,9 +12,9 @@ const CreateProjectSchema = z.object({
     .max(50, "제목은 50자 이하여야 합니다"),
   description: z
     .string()
-    .min(10, "설명은 최소 10자 이상 입력하세요")
-    .max(100, "설명은 100자 이하여야 합니다"),
-  category: z.enum(["영어", "코딩", "자격증", "기타"]),
+    .max(100, "설명은 100자 이하여야 합니다")
+    .optional(),
+  category: z.enum(["영어", "코딩", "간호사", "자격증", "기타"]),
   source_type: z.enum(["prompt", "data_upload"]),
   source_data: z.record(z.unknown()).optional(),
 });

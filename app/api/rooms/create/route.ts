@@ -1,16 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/shared/lib/supabase/server";
-import { groq, DEFAULT_MODEL } from "@/shared/lib/groq";
-import {
-  buildSystemPrompt,
-  buildUserPrompt,
-} from "@/shared/lib/prompts/ai-prompts";
+import { generateProblemsV2, type GenerationMetadata } from "@/shared/lib/ai/generateProblems";
 import {
   generateCacheKey,
   getCachedProblems,
   setCachedProblems,
   type AIProblem,
 } from "@/shared/lib/cache/problem-cache";
+import { validateUserInput, InputSecurityError } from "@/shared/lib/validation/input-security";
+import { costTracker } from "@/shared/lib/monitoring/cost-tracker";
+import type { ProjectCategory } from "@/shared/types";
 
 export async function POST(request: NextRequest) {
   try {
@@ -52,6 +51,21 @@ export async function POST(request: NextRequest) {
         { error: "AI 프롬프트를 입력해주세요" },
         { status: 400 }
       );
+    }
+
+    // 입력 보안 검증
+    try {
+      if (sourceData) validateUserInput(sourceData);
+      if (aiPrompt) validateUserInput(aiPrompt);
+    } catch (error) {
+      if (error instanceof InputSecurityError) {
+        console.warn(`Security validation failed: ${error.type}`, error.message);
+        return NextResponse.json(
+          { error: "입력 내용에 보안 문제가 감지되었습니다. 다시 시도해주세요." },
+          { status: 400 }
+        );
+      }
+      throw error;
     }
 
     const supabase = await createClient();
@@ -107,7 +121,7 @@ export async function POST(request: NextRequest) {
     const dayNumber = (count || 0) + 1;
 
     // 4. 캐시 키 생성 및 캐시 확인
-    const cacheKey = generateCacheKey({
+    const cacheKey = await generateCacheKey({
       sourceData,
       aiPrompt,
       problemCount,
@@ -122,99 +136,73 @@ export async function POST(request: NextRequest) {
     let problems: AIProblem[] | null = await getCachedProblems(cacheKey);
 
     // 캐시 미스 시 AI 호출
+    let metadata: GenerationMetadata | null = null;
     if (!problems) {
-      // 5. 생성 모드별 프롬프트 생성
+      // 5. GPT-4o V2 파이프라인으로 문제 생성
       const finalComplexity =
         generationMode === "ai_only" ? complexity : "simple";
 
-      // 디버그: complexity 전달 확인
-      console.log("[Room Create API] Generation Mode:", generationMode);
-      console.log("[Room Create API] Received Complexity:", complexity);
-      console.log("[Room Create API] Final Complexity:", finalComplexity);
+      console.log(`\n🎯 문제 생성 시작 [${project.category}/${generationMode}/${finalComplexity}]`);
 
-      const systemPrompt = buildSystemPrompt(
-        generationMode,
-        gradingStrictness,
-        aiPrompt || undefined // aiPrompt를 topic으로 전달
-      );
-      const userPrompt = buildUserPrompt({
-        generationMode,
-        sourceData,
-        aiPrompt,
-        problemCount,
-        difficulty,
-        fillBlankRatio,
-        subjectiveType,
-        project,
-        complexity: finalComplexity,
-      });
-
-      // 6. AI로 문제 생성
-      let completion;
       try {
-        completion = await groq.chat.completions.create({
-          messages: [
-            {
-              role: "system",
-              content: systemPrompt,
-            },
-            {
-              role: "user",
-              content: userPrompt,
-            },
-          ],
-          model: DEFAULT_MODEL,
-          temperature: generationMode === "user_data" ? 0.7 : 0.9, // 다양성 증가 (중복 방지)
-          max_tokens: 16000,
-          response_format: { type: "json_object" },
+        const result = await generateProblemsV2({
+          category: project.category as ProjectCategory,
+          sourceData: generationMode !== "ai_only" ? sourceData : undefined,
+          aiPrompt: generationMode === "ai_only" ? aiPrompt : undefined,
+          problemCount,
+          difficulty: difficulty as "easy" | "medium" | "hard",
+          fillBlankRatio,
+          generationMode: generationMode as "user_data" | "hybrid" | "ai_only",
+          complexity: finalComplexity as "simple" | "advanced",
         });
-      } catch (groqError: unknown) {
-        // Groq API rate limit 에러 처리
-        if (
-          groqError &&
-          typeof groqError === "object" &&
-          "status" in groqError &&
-          groqError.status === 429
-        ) {
-          const errorMessage =
-            groqError &&
-            typeof groqError === "object" &&
-            "error" in groqError &&
-            typeof groqError.error === "object" &&
-            groqError.error !== null &&
-            "message" in groqError.error
-              ? String(groqError.error.message)
-              : "일일 토큰 한도를 초과했습니다. 잠시 후 다시 시도해주세요.";
-          return NextResponse.json({ error: errorMessage }, { status: 429 });
+
+        problems = result.problems as AIProblem[];
+        metadata = result.metadata;
+
+        // 비용 추적 (DB 저장)
+        if (metadata?.usage) {
+          const { totalInputTokens, totalOutputTokens, totalCost } = metadata.usage;
+          console.log(`\n💰 문제 생성 완료`);
+          console.log(`   📊 토큰: ${totalInputTokens.toLocaleString()} input + ${totalOutputTokens.toLocaleString()} output = ${(totalInputTokens + totalOutputTokens).toLocaleString()} total`);
+          console.log(`   💵 비용: $${totalCost.toFixed(4)} (약 ${Math.round(totalCost * 1400)}원)\n`);
+          
+          try {
+            await costTracker.trackGeneration({
+              userId: user.id,
+              stage: `${metadata.pipelineType}_pipeline`,
+              inputTokens: totalInputTokens,
+              outputTokens: totalOutputTokens,
+              model: 'gpt-4o-mini',
+            });
+          } catch (trackError) {
+            console.error('Failed to track cost:', trackError);
+          }
         }
-        throw groqError;
+
+        if (problems.length === 0) {
+          throw new Error("AI가 문제를 생성하지 못했습니다");
+        }
+
+        if (problems.length < problemCount * 0.8) {
+          console.warn(`경고: 요청한 문제 수보다 현저히 적게 생성됨`);
+        }
+
+        // 캐시 저장 (로그 제거 - 불필요)
+        await setCachedProblems(cacheKey, problems);
+      } catch (aiError: unknown) {
+        console.error("❌ GPT-4o generation failed:", aiError);
+        
+        if (aiError instanceof Error && aiError.message?.includes('rate limit')) {
+          return NextResponse.json(
+            { error: 'OpenAI API 사용량 한도를 초과했습니다. 잠시 후 다시 시도해주세요.' },
+            { status: 429 }
+          );
+        }
+        
+        throw aiError;
       }
-
-      console.log("AI 응답 받음, 파싱 시작...");
-
-      const aiResponse = completion.choices[0]?.message?.content;
-      if (!aiResponse) {
-        throw new Error("AI 응답을 받지 못했습니다");
-      }
-
-      const parsedResponse = JSON.parse(aiResponse);
-      const generatedProblems: AIProblem[] = parsedResponse.problems || [];
-
-      if (generatedProblems.length === 0) {
-        throw new Error("AI가 문제를 생성하지 못했습니다");
-      }
-
-      if (generatedProblems.length < problemCount * 0.8) {
-        console.warn(`경고: 요청한 문제 수보다 현저히 적게 생성됨`);
-      }
-
-      problems = generatedProblems;
-
-      // 캐시 저장
-      await setCachedProblems(cacheKey, problems);
-      console.log("✅ 문제 캐시 저장 완료:", cacheKey);
     } else {
-      console.log("✅ 캐시에서 문제 로드:", cacheKey);
+      console.log("📦 캐시에서 문제 로드 (비용 없음)");
     }
 
     // 7. 방 생성
@@ -247,21 +235,31 @@ export async function POST(request: NextRequest) {
 
     // 8. 문제들을 DB에 저장
     const problemsToInsert = problems.map(
-      (problem: AIProblem, index: number) => ({
-        room_id: room.id,
-        question: problem.question,
-        question_type: problem.type,
-        options: problem.options ? JSON.stringify(problem.options) : null,
-        correct_answer: problem.correct_answer,
-        explanation: problem.explanation || "",
-        difficulty: problem.difficulty || difficulty,
-        order_number: index + 1,
-        max_length: problem.max_length || null, // 서술형 문제용
-        metadata: JSON.stringify({
-          alternatives: problem.alternatives || [],
-          source_excerpt: problem.source_excerpt || null,
-        }),
-      })
+      (problem: AIProblem, index: number) => {
+        // question_type 필드 처리: GeneratedProblem은 question_type, 이전 형식은 type 사용
+        const questionType = problem.question_type || problem.type;
+        
+        if (!questionType) {
+          console.error('⚠️ Missing question_type in problem:', problem);
+          throw new Error(`문제 타입이 없습니다. 문제: ${problem.question?.substring(0, 50)}...`);
+        }
+        
+        return {
+          room_id: room.id,
+          question: problem.question,
+          question_type: questionType,
+          options: problem.options ? JSON.stringify(problem.options) : null,
+          correct_answer: problem.correct_answer,
+          explanation: problem.explanation || "",
+          difficulty: problem.difficulty || difficulty,
+          order_number: index + 1,
+          max_length: problem.max_length || null, // 서술형 문제용
+          metadata: JSON.stringify({
+            alternatives: problem.alternatives || [],
+            source_excerpt: problem.source_excerpt || null,
+          }),
+        };
+      }
     );
 
     const { error: problemsError } = await supabase
@@ -284,9 +282,12 @@ export async function POST(request: NextRequest) {
       .update({ total_rooms: project.total_rooms + 1 })
       .eq("id", projectId);
 
-    console.log("✅ 방 생성 완료:", room.id);
+    console.log(`✅ 방 생성 완료: ${room.title} (${problems.length}문제)\n`);
 
-    return NextResponse.json({ data: room });
+    return NextResponse.json({ 
+      data: room,
+      metadata: metadata || undefined, // V2 메타데이터 포함
+    });
   } catch (error) {
     console.error("API error:", error);
     return NextResponse.json(
@@ -300,7 +301,13 @@ export async function POST(request: NextRequest) {
 }
 
 // ========================================
-// Helper Functions
+// V2 System Notes
 // ========================================
-// Note: buildSystemPrompt와 buildUserPrompt는
-// shared/lib/prompts/ai-prompts.ts에서 import
+// GPT-4o 기반 3단계 파이프라인:
+// 1. 개념 추출 (user_data/hybrid)
+// 2. 문제 설계
+// 3. 최종 생성 (도메인별 특화)
+// 4. Self-critique 검증
+// 5. 품질 필터링
+//
+// 채점은 여전히 Groq (Llama 3.3) 사용 (실시간 응답 필요)

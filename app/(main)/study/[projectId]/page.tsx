@@ -43,33 +43,19 @@ export default async function ProjectDetailPage({
     user.id
   );
 
-  // 정렬: 완료된 방을 위로 (최신순), 그 다음 미완료된 방 (최신순)
+  // 정렬: 최근에 생성한 방을 가장 위로 (created_at 기준)
   const sortedRooms = [...roomsWithCompletion].sort((a, b) => {
-    const aCompleted = a.is_user_completed;
-    const bCompleted = b.is_user_completed;
-
-    // 완료된 방이 우선
-    if (aCompleted && !bCompleted) return -1;
-    if (!aCompleted && bCompleted) return 1;
-
-    // 같은 상태면 최신순 (completed_at 또는 방 생성 시간 기준)
-    // 완료된 방은 completed_at 기준, 미완료된 방은 방 생성 시간 기준
     type RoomWithDate = {
-      session?: { completed_at?: string } | null;
       created_at?: string;
       [key: string]: unknown;
     };
     const aRoom = a as RoomWithDate;
     const bRoom = b as RoomWithDate;
 
-    const aDate = aRoom.session?.completed_at
-      ? new Date(aRoom.session.completed_at).getTime()
-      : aRoom.created_at
+    const aDate = aRoom.created_at
       ? new Date(aRoom.created_at).getTime()
       : 0;
-    const bDate = bRoom.session?.completed_at
-      ? new Date(bRoom.session.completed_at).getTime()
-      : bRoom.created_at
+    const bDate = bRoom.created_at
       ? new Date(bRoom.created_at).getTime()
       : 0;
     return bDate - aDate; // 최신순 (내림차순)

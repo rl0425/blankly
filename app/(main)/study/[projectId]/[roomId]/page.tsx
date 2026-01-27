@@ -139,6 +139,26 @@ export default function RoomProblemPage({
 
   const currentProblem = problems[currentIndex];
 
+  // 완료된 방에서 현재 문제의 결과 복원
+  useEffect(() => {
+    if (!currentProblem) return;
+    
+    // 완료된 방이면 항상 결과 표시
+    if (isReadOnly) {
+      const result = results[currentProblem.id];
+      if (result) {
+        setShowResult(true);
+        setIsCorrect(result.isCorrect);
+        setAiFeedback(result.feedback || null);
+      } else {
+        // 결과가 없어도 완료된 방이면 결과 표시 (빈 상태)
+        setShowResult(true);
+        setIsCorrect(false);
+        setAiFeedback(null);
+      }
+    }
+  }, [currentProblem, results, isReadOnly]);
+
   const handleAnswer = (answer: string) => {
     if (!currentProblem) return;
     setAnswers({ ...answers, [currentProblem.id]: answer });

@@ -3,6 +3,7 @@
 import { Input } from "@/shared/ui/components/input";
 import { Label } from "@/shared/ui/components/label";
 import { Button } from "@/shared/ui/components/button";
+import { cn } from "@/shared/lib/utils";
 import type { Problem } from "@/shared/types";
 import { parseCodeInText } from "../lib/parseCode";
 
@@ -46,15 +47,21 @@ export function AnswerInput({
             <Button
               key={index}
               type="button"
-              variant={isSelected ? "default" : "outline"}
-              className="w-full justify-start h-auto min-h-[48px] max-h-[160px] py-3 px-4 whitespace-normal text-left leading-relaxed overflow-y-auto"
+              variant="outline"
+              className={cn(
+                "w-full justify-start py-3 px-4 whitespace-normal text-left leading-relaxed overflow-y-auto",
+                "transition-colors duration-150 border-0", // 색상만 애니메이션, 기본 border 제거
+                isSelected
+                  ? "border-2 border-primary bg-primary/5 hover:bg-primary/10"
+                  : "border-2 border-input hover:bg-accent"
+              )}
               onClick={() => handleToggle(option)}
               disabled={disabled}
             >
-              <span className="mr-3 font-bold flex-shrink-0">
-                {isSelected ? "☑" : "☐"} {String.fromCharCode(65 + index)}.
-              </span>
-              <span className="flex-1">{parseCodeInText(option)}</span>
+            <span className="mr-3 font-bold flex-shrink-0">
+              {isSelected ? "☑" : "☐"}
+            </span>
+            <span className="flex-1">{parseCodeInText(option)}</span>
             </Button>
           );
         })}
@@ -66,21 +73,27 @@ export function AnswerInput({
   if (problem.question_type === "multiple_choice" && problem.options) {
     return (
       <div className="space-y-2">
-        {problem.options.map((option, index) => (
-          <Button
-            key={index}
-            type="button"
-            variant={value === option ? "default" : "outline"}
-            className="w-full justify-start h-auto min-h-[48px] max-h-[160px] py-3 px-4 whitespace-normal text-left leading-relaxed overflow-y-auto"
-            onClick={() => onChange(option)}
-            disabled={disabled}
-          >
-            <span className="mr-3 font-bold flex-shrink-0">
-              {String.fromCharCode(65 + index)}.
-            </span>
-            <span className="flex-1">{parseCodeInText(option)}</span>
-          </Button>
-        ))}
+        {problem.options.map((option, index) => {
+          const isSelected = value === option;
+          return (
+            <Button
+              key={index}
+              type="button"
+              variant="outline"
+              className={cn(
+                "w-full justify-start py-3 px-4 whitespace-normal text-left leading-relaxed overflow-y-auto",
+                "transition-colors duration-150 border-0", // 색상만 애니메이션, 기본 border 제거
+                isSelected
+                  ? "border-2 border-primary bg-primary/5 hover:bg-primary/10"
+                  : "border-2 border-input hover:bg-accent"
+              )}
+              onClick={() => onChange(option)}
+              disabled={disabled}
+            >
+              <span className="flex-1">{parseCodeInText(option)}</span>
+            </Button>
+          );
+        })}
       </div>
     );
   }

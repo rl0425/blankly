@@ -29,8 +29,6 @@ export function CreateProjectModal({
     title: "",
     category: "영어",
     description: "",
-    basePrompt: "",
-    role: "",
   });
 
   const resetForm = () => {
@@ -38,8 +36,6 @@ export function CreateProjectModal({
       title: "",
       category: "영어",
       description: "",
-      basePrompt: "",
-      role: "",
     });
   };
 
@@ -51,12 +47,6 @@ export function CreateProjectModal({
         title: initialData.title || "",
         category: initialData.category || "영어",
         description: initialData.description || "",
-        basePrompt:
-          (initialData.source_data as { basePrompt?: string; role?: string })
-            ?.basePrompt || "",
-        role:
-          (initialData.source_data as { basePrompt?: string; role?: string })
-            ?.role || "",
       });
     }
   }, [editMode, initialData]);
@@ -124,14 +114,11 @@ export function CreateProjectModal({
       return;
     }
 
-    if (
-      !formData.description ||
-      formData.description.length < 10 ||
-      formData.description.length > 100
-    ) {
+    // 설명은 선택사항 (있으면 100자 이하)
+    if (formData.description && formData.description.length > 100) {
       toast({
         title: "설명 오류",
-        description: "설명은 10자 이상 100자 이하여야 합니다.",
+        description: "설명은 100자 이하여야 합니다.",
         variant: "destructive",
       });
       return;
@@ -161,13 +148,8 @@ export function CreateProjectModal({
       requestData.append("category", formData.category);
       requestData.append("description", formData.description);
       requestData.append("source_type", "prompt");
-      requestData.append(
-        "source_data",
-        JSON.stringify({
-          basePrompt: formData.basePrompt,
-          role: formData.role,
-        })
-      );
+      // source_data는 null로 설정 (프로젝트 레벨 프롬프트 제거)
+      requestData.append("source_data", JSON.stringify(null));
 
       if (editMode && initialData) {
         // 수정 모드
@@ -235,7 +217,7 @@ export function CreateProjectModal({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2 }}
-          className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-[100] p-0 md:p-4"
+          className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-100 p-0 md:p-4"
           onClick={(e) => {
             if (e.target === e.currentTarget && !loading) {
               handleOpenChange(false);
@@ -257,8 +239,7 @@ export function CreateProjectModal({
                   {editMode ? "프로젝트 수정" : "새 프로젝트 만들기"}
                 </h2>
                 <p className="text-sm text-muted-foreground mt-1">
-                  프로젝트의 기본 설정을 입력하세요. 이 설정은 모든 방에서
-                  사용됩니다.
+                  프로젝트는 학습 주제의 카테고리입니다. 상세한 프롬프트는 방 생성 시 입력하세요.
                 </p>
               </div>
               <Button
@@ -315,6 +296,7 @@ export function CreateProjectModal({
                   >
                     <option value="영어">영어</option>
                     <option value="코딩">코딩</option>
+                    <option value="간호사">간호사</option>
                     <option value="자격증">자격증</option>
                     <option value="기타">기타</option>
                   </select>
@@ -337,45 +319,8 @@ export function CreateProjectModal({
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="role">
-                    AI 역할 설정 <span className="text-red-500">*</span>
-                  </Label>
-                  <textarea
-                    id="role"
-                    value={formData.role}
-                    onChange={(e) =>
-                      setFormData({ ...formData, role: e.target.value })
-                    }
-                    placeholder="예: 당신은 토익 시험 전문가입니다."
-                    className="flex min-h-[80px] w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm resize-y"
-                    required
-                    disabled={loading}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    AI가 어떤 역할로 문제를 만들지 설정합니다
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="basePrompt">
-                    기본 프롬프트 <span className="text-red-500">*</span>
-                  </Label>
-                  <textarea
-                    id="basePrompt"
-                    value={formData.basePrompt}
-                    onChange={(e) =>
-                      setFormData({ ...formData, basePrompt: e.target.value })
-                    }
-                    placeholder="예: 토익 RC Part 5 문법 문제를 출제해주세요. 실전과 유사한 난이도로 만들어주세요."
-                    className="flex min-h-[100px] w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm resize-y"
-                    required
-                    disabled={loading}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    모든 방에서 기본으로 사용될 프롬프트입니다
-                  </p>
-                </div>
+                {/* AI 역할 및 기본 프롬프트 필드 제거 */}
+                {/* 방(Room) 생성 시 프롬프트를 직접 입력하도록 단순화 */}
               </form>
             </div>
 
@@ -396,11 +341,7 @@ export function CreateProjectModal({
                   loading ||
                   !formData.title ||
                   formData.title.length > 50 ||
-                  !formData.description ||
-                  formData.description.length < 10 ||
-                  formData.description.length > 100 ||
-                  !formData.role ||
-                  !formData.basePrompt
+                  (formData.description?.length ?? 0) > 100
                 }
                 className="flex-1"
                 form="project-form"

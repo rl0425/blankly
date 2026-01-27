@@ -6,9 +6,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/shared/ui/components/card";
-import { CheckCircle, Lightbulb, XCircle } from "lucide-react";
+import { Check, Lightbulb, X } from "lucide-react";
 import type { Problem } from "@/shared/types";
 import { parseCodeInText } from "../lib/parseCode";
+import { cn } from "@/shared/lib/utils";
 
 interface ProblemCardProps {
   problem: Problem;
@@ -48,6 +49,35 @@ function highlightAnswer(explanation: string, answer: string): React.ReactNode {
   );
 }
 
+// 빈칸 채우기 문제에서 "빈칸을 채우시오" 부분을 분리하는 함수
+function parseFillBlankQuestion(question: string): { instruction: string; content: string } | null {
+  // "빈칸을 채우시오" 패턴 찾기 (다양한 구분자와 줄바꿈 지원)
+  // 's' flag 대신 [\s\S] 사용 (ES5 호환)
+  const patterns = [
+    // 콜론으로 구분
+    /^(빈칸을\s*채우[시세]?오)[:\s]*\n*([\s\S]+)$/i,
+    /^(빈칸을\s*채워\s*넣으[시세]?오)[:\s]*\n*([\s\S]+)$/i,
+    /^(빈칸\s*채우기)[:\s]*\n*([\s\S]+)$/i,
+    // 마침표로 구분
+    /^(빈칸을\s*채우[시세]?오)\.\s*\n*([\s\S]+)$/i,
+    /^(빈칸을\s*채워\s*넣으[시세]?오)\.\s*\n*([\s\S]+)$/i,
+    // 공백으로만 구분 (최소 2개 이상)
+    /^(빈칸을\s*채우[시세]?오)\s{2,}\n*([\s\S]+)$/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = question.match(pattern);
+    if (match && match[2] && match[2].trim().length > 0) {
+      return {
+        instruction: '빈칸을 채워주세요', // 통일된 문구 사용
+        content: match[2].trim(),
+      };
+    }
+  }
+
+  return null;
+}
+
 export function ProblemCard({
   problem,
   showResult = false,
@@ -56,32 +86,71 @@ export function ProblemCard({
 }: ProblemCardProps) {
   return (
     <Card
-      className={
+      className={cn(
+        "relative overflow-visible",
         showResult ? (isCorrect ? "border-primary" : "border-destructive") : ""
-      }
+      )}
     >
-      <CardHeader>
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <CardTitle className="text-lg leading-relaxed">
-              {parseCodeInText(problem.question)}
-            </CardTitle>
-            {/* 서술형 문제일 때 입력 안내 표시 */}
-            {problem.question_type === "essay" && problem.max_length && (
-              <p className="text-sm text-muted-foreground mt-2 flex items-center gap-1">
-                <Lightbulb className="h-3 w-3" />
-                {problem.max_length}자 이내로 답변해주세요
-              </p>
+      {/* 결과 배지 - 오른쪽 위 모서리 중앙 */}
+      {showResult && (
+        <div className="absolute -top-3 -right-3 z-50">
+          <div className={cn(
+            "rounded-full shadow-lg border-2 flex items-center justify-center w-10 h-10",
+            isCorrect 
+              ? "bg-green-500 border-green-600 dark:bg-green-600 dark:border-green-700" 
+              : "bg-red-500 border-red-600 dark:bg-red-600 dark:border-red-700"
+          )}>
+            {isCorrect ? (
+              <Check className="h-5 w-5 text-white stroke-[3]" />
+            ) : (
+              <X className="h-5 w-5 text-white stroke-[3]" />
             )}
           </div>
-          {showResult && (
-            <div className="shrink-0 ml-2">
-              {isCorrect ? (
-                <CheckCircle className="h-6 w-6 text-primary" />
-              ) : (
-                <XCircle className="h-6 w-6 text-destructive" />
-              )}
-            </div>
+        </div>
+      )}
+      
+      <CardHeader>
+        <div className="flex-1 min-w-0">
+          {/* 빈칸 채우기 문제: "빈칸을 채우시오"를 소제목으로 분리 */}
+          {problem.question_type === "fill_blank" ? (
+            (() => {
+              const parsed = parseFillBlankQuestion(problem.question);
+              if (parsed) {
+                return (
+                  <div className="space-y-3">
+                    {/* 제목: 빈칸을 채워주세요 */}
+                    <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg">
+                      <span className="text-sm font-semibold text-blue-700 dark:text-blue-400">
+                        {parsed.instruction}
+                      </span>
+                    </div>
+                    {/* 빈칸 문제 내용 */}
+                    <div className="pl-1">
+                      <CardTitle className="text-lg leading-relaxed break-words">
+                        {parseCodeInText(parsed.content)}
+                      </CardTitle>
+                    </div>
+                  </div>
+                );
+              }
+              // 패턴이 매치되지 않으면 기존 방식으로 표시
+              return (
+                <CardTitle className="text-lg leading-relaxed break-words">
+                  {parseCodeInText(problem.question)}
+                </CardTitle>
+              );
+            })()
+          ) : (
+            <CardTitle className="text-lg leading-relaxed break-words">
+              {parseCodeInText(problem.question)}
+            </CardTitle>
+          )}
+          {/* 서술형 문제일 때 입력 안내 표시 */}
+          {problem.question_type === "essay" && problem.max_length && (
+            <p className="text-sm text-muted-foreground mt-2 flex items-center gap-1">
+              <Lightbulb className="h-3 w-3" />
+              {problem.max_length}자 이내로 답변해주세요
+            </p>
           )}
         </div>
       </CardHeader>
@@ -93,13 +162,13 @@ export function ProblemCard({
             {!isCorrect && (
               <div>
                 <p className="text-sm font-medium text-destructive">정답:</p>
-                <p className="text-sm">{problem.correct_answer}</p>
+                <p className="text-sm break-words">{problem.correct_answer}</p>
               </div>
             )}
             {problem.explanation && (
               <div>
                 <p className="text-sm font-medium">해설:</p>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-muted-foreground break-words">
                   {problem.question_type === "fill_blank"
                     ? highlightAnswer(
                         problem.explanation,

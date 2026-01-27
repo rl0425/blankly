@@ -17,7 +17,7 @@ export interface UserProfile {
 }
 
 // Project Types
-export type ProjectCategory = '영어' | '코딩' | '자격증' | '기타';
+export type ProjectCategory = '영어' | '코딩' | '간호사' | '자격증' | '기타';
 export type SourceType = 'prompt' | 'data_upload';
 
 export interface Project {

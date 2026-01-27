@@ -61,8 +61,29 @@ temp/
 *.log
 
 # Business Secrets (프롬프트 등 핵심 자산)
-shared/lib/prompts/ai-prompts.ts
+# AI 프롬프트 - 핵심 경쟁력
+shared/lib/prompts/**/*.ts
+!shared/lib/prompts/types.ts
+
+# RAG 샘플 데이터 (핵심 자산)
+shared/lib/rag/samples/**/*.json
+shared/lib/rag/samples/**/*.ts
+!shared/lib/rag/samples/README.md
+!shared/lib/rag/samples/.gitkeep
 
 # Database Schema (DB 구조 비공개)
 supabase/*.sql
-supabase
+supabase/migrations
+supabase/seed.sql
+
+# 민감한 설정 파일
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# API Keys 및 비밀 정보
+**/secrets.ts
+**/api-keys.ts
+
+**/*.md

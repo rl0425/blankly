@@ -1,9 +1,29 @@
 import { createClient } from "@/shared/lib/supabase/server";
 import { createHash } from "crypto";
 
+/**
+ * 샘플 버전 조회
+ */
+async function getSamplesVersion(): Promise<string> {
+  try {
+    const supabase = await createClient();
+    const { data } = await supabase
+      .from('system_config')
+      .select('value')
+      .eq('key', 'samples_version')
+      .single();
+    
+    return data?.value || 'v1.0.0';
+  } catch (error) {
+    console.error('Failed to get samples version:', error);
+    return 'v1.0.0';
+  }
+}
+
 export interface AIProblem {
   question: string;
-  type: string;
+  question_type?: string; // GeneratedProblem 형식
+  type?: string; // 이전 형식 호환성
   options?: string[] | null;
   correct_answer: string;
   alternatives?: string[];
@@ -26,9 +46,9 @@ interface CacheKeyParams {
 }
 
 /**
- * 캐시 키 생성 (학습 자료 + 설정의 해시값)
+ * 캐시 키 생성 (학습 자료 + 설정 + 샘플 버전의 해시값)
  */
-export function generateCacheKey(params: CacheKeyParams): string {
+export async function generateCacheKey(params: CacheKeyParams): Promise<string> {
   const {
     sourceData,
     aiPrompt,
@@ -41,6 +61,9 @@ export function generateCacheKey(params: CacheKeyParams): string {
     complexity,
   } = params;
 
+  // 샘플 버전 조회 (RAG 결과 반영)
+  const samplesVersion = await getSamplesVersion();
+
   // 캐시 키에 포함할 데이터
   const cacheData = JSON.stringify({
     sourceData: sourceData?.trim() || "",
@@ -51,12 +74,13 @@ export function generateCacheKey(params: CacheKeyParams): string {
     subjectiveType,
     gradingStrictness,
     generationMode,
-    complexity: complexity || "simple", // 기본값: simple
+    complexity: complexity || "simple",
+    samplesVersion,  // ⭐ 샘플 버전 추가
   });
 
   // SHA-256 해시 생성
   const hash = createHash("sha256").update(cacheData).digest("hex");
-  return `problem_cache:${hash}`;
+  return `problem_cache:v2:${hash}`;  // v2로 업그레이드
 }
 
 /**
@@ -103,14 +127,40 @@ export async function setCachedProblems(
 ): Promise<void> {
   try {
     const supabase = await createClient();
-    const { error } = await supabase.from("problem_cache").upsert({
-      cache_key: cacheKey,
-      problems: problems,
-      created_at: new Date().toISOString(),
-    });
-
-    if (error) {
-      console.error("Cache storage error:", error);
+    
+    // 기존 캐시 확인
+    const { data: existing } = await supabase
+      .from("problem_cache")
+      .select("cache_key")
+      .eq("cache_key", cacheKey)
+      .single();
+    
+    if (existing) {
+      // 이미 있으면 업데이트
+      const { error } = await supabase
+        .from("problem_cache")
+        .update({
+          problems: problems,
+          created_at: new Date().toISOString(),
+        })
+        .eq("cache_key", cacheKey);
+      
+      if (error) {
+        console.error("Cache update error:", error);
+      }
+    } else {
+      // 없으면 생성
+      const { error } = await supabase
+        .from("problem_cache")
+        .insert({
+          cache_key: cacheKey,
+          problems: problems,
+          created_at: new Date().toISOString(),
+        });
+      
+      if (error) {
+        console.error("Cache insert error:", error);
+      }
     }
   } catch (error) {
     console.error("Cache storage error:", error);

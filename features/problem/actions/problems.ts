@@ -110,10 +110,25 @@ export async function submitAnswer(
     isCorrect = JSON.stringify(userAnswers) === JSON.stringify(correctAnswers);
   } else {
     // 주관식: AI로 유사도 판단
-    try {
-      // metadata에서 alternatives 추출
-      const metadata = problem.metadata as { alternatives?: string[] } | null;
-      const alternatives = metadata?.alternatives || [];
+    
+    // 의미 없는 답변 사전 검증
+    const trimmedAnswer = userAnswer.trim();
+    const meaninglessPatterns = /^[?!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/~`]+$|^(모름|모르겠음|몰라|모르겠어요)$/i;
+    
+    if (meaninglessPatterns.test(trimmedAnswer)) {
+      // 의미 없는 답변은 즉시 오답 처리
+      isCorrect = false;
+      aiFeedback = {
+        is_correct: false,
+        score: 0,
+        feedback: "의미 있는 답변을 입력해주세요. 특수문자나 '모름' 같은 답변은 인정되지 않습니다.",
+        improvement_tip: "문제를 다시 읽고 정답을 생각해보세요."
+      };
+    } else {
+      try {
+        // metadata에서 alternatives 추출
+        const metadata = problem.metadata as { alternatives?: string[] } | null;
+        const alternatives = metadata?.alternatives || [];
 
       // 복수 정답 처리: "/" 구분자가 있으면 분리
       const correctAnswers = problem.correct_answer
@@ -250,6 +265,7 @@ export async function submitAnswer(
         isCorrect = matchesAnyCorrectAnswer ||
                     normalizedAlternatives.includes(normalizedUserAnswer) ||
                     containsAnyCorrectAnswer;
+      }
       }
     }
   }

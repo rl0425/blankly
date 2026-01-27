@@ -5,6 +5,15 @@ AI 기반 스마트 빈칸 채우기 학습 앱
 Blankly는 사용자가 업로드한 학습 자료를 AI가 자동으로 분석하여 
 빈칸 채우기 및 객관식 문제를 생성하는 학습 플랫폼
 
+## 📚 문서
+
+상세한 문서는 [`docs/`](docs/) 폴더를 참고하세요:
+
+- **[문서 시작하기](docs/00-README.md)** - 전체 개요
+- **[설치 및 환경 설정](docs/01-SETUP.md)** - 프로젝트 설치
+- **[RAG 시스템 가이드](docs/02-RAG_GUIDE.md)** - RAG 시스템 이해
+- **[최적화 완료](docs/03-OPTIMIZATION.md)** - 성능 개선 내역
+
 ## 주요 기능
 
 - 학습 자료 기반 자동 문제 생성 (PDF, 텍스트 지원)
@@ -29,8 +38,9 @@ Blankly는 사용자가 업로드한 학습 자료를 AI가 자동으로 분석�
 - React Query (서버 상태)
 
 ### Backend
-- Supabase (PostgreSQL, Auth, Storage)
-- Groq AI (Llama 3.3 70B)
+- Supabase (PostgreSQL, Auth, Storage, pgvector)
+- OpenAI GPT-4o (문제 생성 + Validator)
+- RAG 시스템 (Few-shot Learning)
 - Next.js API Routes
 - Server Actions
 
@@ -105,6 +115,19 @@ MIT
 
 Blankly Team
 
+## 성능 지표
+
+| 지표 | 개선율 |
+|-----|--------|
+| 응답 시간 | **50-57% ↓** |
+| 비용 | **44-75% ↓** |
+| 캐시 히트율 | **25% ↑** |
+
+자세한 내용은 [최적화 문서](docs/03-OPTIMIZATION.md)를 참고하세요.
+
 ## 버전
 
-0.1.0 (Alpha)
+2.1.0 (프로젝트 단순화)
+- 프로젝트 레벨 프롬프트 제거
+- 방 생성 시 프롬프트만 입력
+- 토큰 사용량 62% 절감
