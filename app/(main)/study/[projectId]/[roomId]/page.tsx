@@ -71,6 +71,16 @@ export default function RoomProblemPage({
       const { data: roomData } = await roomResponse.json();
       setRoom(roomData);
 
+      // 문제 목록 먼저 가져오기 (답안 복원에 필요)
+      const problemsResponse = await fetch(
+        `/api/rooms/${resolvedParams.roomId}/problems`
+      );
+      if (!problemsResponse.ok) throw new Error("문제를 가져올 수 없습니다");
+      const { data: problemsData } = await problemsResponse.json();
+
+      console.log(`${problemsData.length}개의 문제를 불러왔습니다`);
+      setProblems(problemsData);
+
       // 방이 완료되었는지 확인 (세션 조회)
       const sessionResponse = await fetch(
         `/api/rooms/${resolvedParams.roomId}/session`
@@ -80,44 +90,53 @@ export default function RoomProblemPage({
         const completed = sessionData?.is_completed || false;
         setIsReadOnly(completed); // 완료한 방이면 읽기 전용 모드
 
-        // 완료한 방이면 이전 답안과 결과 불러오기
-        if (completed) {
-          const answersResponse = await fetch(
-            `/api/rooms/${resolvedParams.roomId}/answers`
-          );
-          if (answersResponse.ok) {
-            const { data: answersData } = await answersResponse.json();
-            // 답안 설정
-            const loadedAnswers: Record<string, string> = {};
-            const loadedResults: Record<
-              string,
-              { isCorrect: boolean; feedback?: AIGradeResponse }
-            > = {};
+        // 진행 중이거나 완료한 방 모두 답안 불러오기 (진행 상황 복원)
+        const answersResponse = await fetch(
+          `/api/rooms/${resolvedParams.roomId}/answers`
+        );
+        if (answersResponse.ok) {
+          const { data: answersData } = await answersResponse.json();
+          // 답안 설정
+          const loadedAnswers: Record<string, string> = {};
+          const loadedResults: Record<
+            string,
+            { isCorrect: boolean; feedback?: AIGradeResponse }
+          > = {};
 
-            Object.entries(answersData).forEach(([problemId, answerData]) => {
-              const typedAnswerData = answerData as AnswerData;
-              loadedAnswers[problemId] = typedAnswerData.user_answer;
-              loadedResults[problemId] = {
-                isCorrect: typedAnswerData.is_correct,
-                feedback: typedAnswerData.ai_feedback || undefined,
-              };
-            });
+          Object.entries(answersData).forEach(([problemId, answerData]) => {
+            const typedAnswerData = answerData as AnswerData;
+            loadedAnswers[problemId] = typedAnswerData.user_answer;
+            loadedResults[problemId] = {
+              isCorrect: typedAnswerData.is_correct,
+              feedback: typedAnswerData.ai_feedback || undefined,
+            };
+          });
 
-            setAnswers(loadedAnswers);
-            setResults(loadedResults);
+          setAnswers(loadedAnswers);
+          setResults(loadedResults);
+
+          // 마지막으로 답한 다음 문제로 이동 (아직 답하지 않은 첫 문제)
+          if (problemsData.length > 0) {
+            const nextUnansweredIndex = problemsData.findIndex(
+              (p: Problem) => !loadedAnswers[p.id]
+            );
+            if (nextUnansweredIndex !== -1) {
+              setCurrentIndex(nextUnansweredIndex);
+            } else {
+              // 모든 문제를 다 풀었으면 마지막 문제로
+              setCurrentIndex(problemsData.length - 1);
+              // 마지막 문제의 결과 표시
+              const lastProblem = problemsData[problemsData.length - 1];
+              const lastResult = loadedResults[lastProblem.id];
+              if (lastResult) {
+                setShowResult(true);
+                setIsCorrect(lastResult.isCorrect);
+                setAiFeedback(lastResult.feedback || null);
+              }
+            }
           }
         }
       }
-
-      // 문제 목록 가져오기
-      const problemsResponse = await fetch(
-        `/api/rooms/${resolvedParams.roomId}/problems`
-      );
-      if (!problemsResponse.ok) throw new Error("문제를 가져올 수 없습니다");
-      const { data: problemsData } = await problemsResponse.json();
-
-      console.log(`${problemsData.length}개의 문제를 불러왔습니다`);
-      setProblems(problemsData);
     } catch (error) {
       console.error("데이터 로드 오류:", error);
       toast({
@@ -136,6 +155,34 @@ export default function RoomProblemPage({
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // 현재 문제가 변경될 때 답안과 결과 복원
+  useEffect(() => {
+    if (
+      currentIndex >= 0 &&
+      problems.length > 0 &&
+      currentIndex < problems.length
+    ) {
+      const problem = problems[currentIndex];
+      if (!problem) return;
+
+      // 결과가 있으면 복원 (이미 제출한 문제)
+      const savedResult = results[problem.id];
+      if (savedResult) {
+        setShowResult(true);
+        setIsCorrect(savedResult.isCorrect);
+        setAiFeedback(savedResult.feedback || null);
+      } else {
+        // 결과가 없으면 결과 숨김 (아직 제출하지 않은 문제)
+        if (!isReadOnly) {
+          setShowResult(false);
+          setIsCorrect(false);
+          setAiFeedback(null);
+        }
+      }
+      // 답안은 AnswerInput의 value prop으로 자동 복원됨 (answers[problem.id])
+    }
+  }, [currentIndex, problems, answers, results, isReadOnly]);
 
   const currentProblem = problems[currentIndex];
 
